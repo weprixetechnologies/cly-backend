@@ -1,0 +1,27 @@
+{
+  "name": "cly-backend",
+  "version": "1.0.0",
+  "description": "This is the backend file controlling all the backend functions and api for cly user and admin panel which are build over next and react js. This file is based on NodeJs + ExpressJS + SQl.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "nodemon index.js",
+    "dev": "nodemon index.js",
+    "migrate:order-status": "node migrations/alter_order_status_enum.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.12.2",
+    "basic-ftp": "^5.0.5",
+    "bcryptjs": "^3.0.2",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.2",
+    "express": "^5.1.0",
+    "form-data": "^4.0.4",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^1.4.5-lts.1",
+    "mysql2": "^3.15.0",
+    "nodemon": "^3.1.10"
+  }
+}
