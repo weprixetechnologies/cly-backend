@@ -3,7 +3,10 @@ const db = require('../utils/dbconnect');
 // Get all users with pagination and filters
 const getAllUsers = async ({ page, limit, search, status, role }) => {
     try {
-        const offset = (page - 1) * limit;
+        // Ensure limit and page are integers
+        const pageNum = parseInt(page) || 1;
+        const limitNum = parseInt(limit) || 10;
+        const offset = (pageNum - 1) * limitNum;
 
         let whereConditions = [];
         let queryParams = [];
@@ -44,8 +47,9 @@ const getAllUsers = async ({ page, limit, search, status, role }) => {
       LIMIT ? OFFSET ?
     `;
 
-        const users = await db.execute(usersQuery, [...queryParams, limit, offset]);
-        const totalPages = Math.ceil(totalUsers / limit);
+        // Ensure limit and offset are integers
+        const users = await db.execute(usersQuery, [...queryParams, parseInt(limitNum), parseInt(offset)]);
+        const totalPages = Math.ceil(totalUsers / limitNum);
 
         return {
             users: users[0],

@@ -12,8 +12,8 @@ const getAllUsers = async (req, res) => {
         } = req.query;
 
         const result = await userService.getAllUsers({
-            page: parseInt(page),
-            limit: parseInt(limit),
+            page: page,
+            limit: limit,
             search,
             status,
             role
