@@ -32,8 +32,7 @@ async function generateUniqueProductID() {
 async function checkProductIDExists(productID) {
     try {
         const [rows] = await db.execute(
-            'SELECT productID FROM products WHERE productID = ?',
-            [productID]
+            `SELECT productID FROM products WHERE productID = '${productID}'`
         );
         return rows.length > 0;
     } catch (error) {
@@ -66,12 +65,7 @@ async function createProduct(productData) {
                 productID, productName, productPrice, sku, description, 
                 boxQty, packQty, minQty, categoryID, categoryName, 
                 featuredImages, galleryImages, inventory
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [
-                productID, productName, productPrice, sku, description,
-                boxQty, packQty, minQty, categoryID, categoryName,
-                featuredImages, JSON.stringify(galleryImages), inventory
-            ]
+            ) VALUES ('${productID}', '${productName}', ${productPrice}, '${sku}', '${description}', ${boxQty}, ${packQty}, ${minQty}, '${categoryID}', '${categoryName}', '${featuredImages}', '${JSON.stringify(galleryImages)}', ${inventory})`
         );
 
         return {
@@ -87,41 +81,40 @@ async function createProduct(productData) {
 // Get all products with pagination
 async function getAllProducts(page = 1, limit = 10, search = '') {
     try {
-        const offset = (page - 1) * limit;
+        // Ensure page and limit are integers
+        const pageNum = parseInt(page) || 1;
+        const limitNum = parseInt(limit) || 10;
+        const offset = (pageNum - 1) * limitNum;
+
         let query = 'SELECT * FROM products WHERE 1=1';
         let params = [];
 
         if (search) {
-            query += ' AND (productName LIKE ? OR sku LIKE ? OR categoryName LIKE ?)';
-            const searchTerm = `%${search}%`;
-            params = [searchTerm, searchTerm, searchTerm];
+            query += ` AND (productName LIKE '%${search}%' OR sku LIKE '%${search}%' OR categoryName LIKE '%${search}%')`;
         }
 
-        query += ' ORDER BY createdAt DESC LIMIT ? OFFSET ?';
-        params.push(limit, offset);
+        query += ` ORDER BY createdAt DESC LIMIT ${limitNum} OFFSET ${offset}`;
 
-        const [rows] = await db.execute(query, params);
+        const [rows] = await db.execute(query);
 
         // Get total count for pagination
         let countQuery = 'SELECT COUNT(*) as total FROM products WHERE 1=1';
         let countParams = [];
 
         if (search) {
-            countQuery += ' AND (productName LIKE ? OR sku LIKE ? OR categoryName LIKE ?)';
-            const searchTerm = `%${search}%`;
-            countParams = [searchTerm, searchTerm, searchTerm];
+            countQuery += ` AND (productName LIKE '%${search}%' OR sku LIKE '%${search}%' OR categoryName LIKE '%${search}%')`;
         }
 
-        const [countResult] = await db.execute(countQuery, countParams);
+        const [countResult] = await db.execute(countQuery);
         const total = countResult[0].total;
 
         return {
             products: rows,
             pagination: {
-                page,
-                limit,
+                page: pageNum,
+                limit: limitNum,
                 total,
-                totalPages: Math.ceil(total / limit)
+                totalPages: Math.ceil(total / limitNum)
             }
         };
     } catch (error) {
@@ -133,8 +126,7 @@ async function getAllProducts(page = 1, limit = 10, search = '') {
 async function getProductById(productID) {
     try {
         const [rows] = await db.execute(
-            'SELECT * FROM products WHERE productID = ?',
-            [productID]
+            `SELECT * FROM products WHERE productID = '${productID}'`
         );
         return rows[0] || null;
     } catch (error) {
@@ -163,17 +155,11 @@ async function updateProduct(productID, productData) {
 
         const [result] = await db.execute(
             `UPDATE products SET 
-                productName = ?, productPrice = ?, sku = ?, description = ?,
-                boxQty = ?, packQty = ?, minQty = ?, categoryID = ?, categoryName = ?,
-                featuredImages = ?, galleryImages = ?, inventory = ?, status = ?,
+                productName = '${productName}', productPrice = ${productPrice}, sku = '${sku}', description = '${description}',
+                boxQty = ${boxQty}, packQty = ${packQty}, minQty = ${minQty}, categoryID = '${categoryID}', categoryName = '${categoryName}',
+                featuredImages = '${featuredImages}', galleryImages = '${JSON.stringify(galleryImages)}', inventory = ${inventory}, status = '${status}',
                 updatedAt = CURRENT_TIMESTAMP
-            WHERE productID = ?`,
-            [
-                productName, productPrice, sku, description,
-                boxQty, packQty, minQty, categoryID, categoryName,
-                featuredImages, JSON.stringify(galleryImages), inventory, status,
-                productID
-            ]
+            WHERE productID = '${productID}'`
         );
 
         return {
@@ -189,8 +175,7 @@ async function updateProduct(productID, productData) {
 async function deleteProduct(productID) {
     try {
         const [result] = await db.execute(
-            'DELETE FROM products WHERE productID = ?',
-            [productID]
+            `DELETE FROM products WHERE productID = '${productID}'`
         );
         return {
             affectedRows: result.affectedRows
@@ -219,8 +204,7 @@ async function createCategory(categoryData) {
         const { categoryName, image } = categoryData;
 
         const [result] = await db.execute(
-            'INSERT INTO categories (categoryID, categoryName, image) VALUES (?, ?, ?)',
-            [categoryID, categoryName, image]
+            `INSERT INTO categories (categoryID, categoryName, image) VALUES ('${categoryID}', '${categoryName}', '${image}')`
         );
 
         return {

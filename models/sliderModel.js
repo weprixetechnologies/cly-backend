@@ -6,8 +6,7 @@ async function createDesktopSlider(sliderData) {
         const { imgUrl } = sliderData;
 
         const [result] = await db.execute(
-            'INSERT INTO sliderDesktop (imgUrl) VALUES (?)',
-            [imgUrl]
+            `INSERT INTO sliderDesktop (imgUrl) VALUES ('${imgUrl}')`
         );
 
         return {
@@ -26,8 +25,7 @@ async function createMobileSlider(sliderData) {
         const { imgUrl } = sliderData;
 
         const [result] = await db.execute(
-            'INSERT INTO sliderMobile (imgUrl) VALUES (?)',
-            [imgUrl]
+            `INSERT INTO sliderMobile (imgUrl) VALUES ('${imgUrl}')`
         );
 
         return {
@@ -68,8 +66,7 @@ async function getAllMobileSliders() {
 async function getDesktopSliderById(sliderID) {
     try {
         const [rows] = await db.execute(
-            'SELECT * FROM sliderDesktop WHERE sliderID = ?',
-            [sliderID]
+            `SELECT * FROM sliderDesktop WHERE sliderID = ${sliderID}`
         );
         return rows[0] || null;
     } catch (error) {
@@ -81,8 +78,7 @@ async function getDesktopSliderById(sliderID) {
 async function getMobileSliderById(sliderID) {
     try {
         const [rows] = await db.execute(
-            'SELECT * FROM sliderMobile WHERE sliderID = ?',
-            [sliderID]
+            `SELECT * FROM sliderMobile WHERE sliderID = ${sliderID}`
         );
         return rows[0] || null;
     } catch (error) {
@@ -96,8 +92,7 @@ async function updateDesktopSlider(sliderID, sliderData) {
         const { imgUrl } = sliderData;
 
         const [result] = await db.execute(
-            'UPDATE sliderDesktop SET imgUrl = ?, updatedAt = CURRENT_TIMESTAMP WHERE sliderID = ?',
-            [imgUrl, sliderID]
+            `UPDATE sliderDesktop SET imgUrl = '${imgUrl}', updatedAt = CURRENT_TIMESTAMP WHERE sliderID = ${sliderID}`
         );
 
         return {
@@ -115,8 +110,7 @@ async function updateMobileSlider(sliderID, sliderData) {
         const { imgUrl } = sliderData;
 
         const [result] = await db.execute(
-            'UPDATE sliderMobile SET imgUrl = ?, updatedAt = CURRENT_TIMESTAMP WHERE sliderID = ?',
-            [imgUrl, sliderID]
+            `UPDATE sliderMobile SET imgUrl = '${imgUrl}', updatedAt = CURRENT_TIMESTAMP WHERE sliderID = ${sliderID}`
         );
 
         return {
@@ -132,8 +126,7 @@ async function updateMobileSlider(sliderID, sliderData) {
 async function deleteDesktopSlider(sliderID) {
     try {
         const [result] = await db.execute(
-            'DELETE FROM sliderDesktop WHERE sliderID = ?',
-            [sliderID]
+            `DELETE FROM sliderDesktop WHERE sliderID = ${sliderID}`
         );
         return {
             affectedRows: result.affectedRows
@@ -147,8 +140,7 @@ async function deleteDesktopSlider(sliderID) {
 async function deleteMobileSlider(sliderID) {
     try {
         const [result] = await db.execute(
-            'DELETE FROM sliderMobile WHERE sliderID = ?',
-            [sliderID]
+            `DELETE FROM sliderMobile WHERE sliderID = ${sliderID}`
         );
         return {
             affectedRows: result.affectedRows

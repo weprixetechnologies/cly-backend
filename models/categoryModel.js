@@ -6,14 +6,13 @@ async function createCategory(categoryData, connection = null) {
         const { categoryID, categoryName, image, productCount } = categoryData;
 
         const query = `INSERT INTO categories (categoryID, categoryName, image, productCount, createdAt) 
-                       VALUES (?, ?, ?, ?, NOW())`;
-        const params = [categoryID, categoryName, image, productCount || 0];
+                       VALUES ('${categoryID}', '${categoryName}', '${image}', ${productCount || 0}, NOW())`;
 
         let result;
         if (connection) {
-            [result] = await connection.execute(query, params);
+            [result] = await connection.execute(query);
         } else {
-            [result] = await db.execute(query, params);
+            [result] = await db.execute(query);
         }
 
         return {
@@ -42,8 +41,8 @@ async function getAllCategories() {
 // Get category by ID
 async function getCategoryById(categoryID) {
     try {
-        const query = `SELECT * FROM categories WHERE categoryID = ?`;
-        const [rows] = await db.execute(query, [categoryID]);
+        const query = `SELECT * FROM categories WHERE categoryID = '${categoryID}'`;
+        const [rows] = await db.execute(query);
         return rows[0] || null;
     } catch (error) {
         throw new Error(`Error getting category by ID: ${error.message}`);
@@ -60,8 +59,7 @@ async function updateCategory(categoryID, updateData, connection = null) {
         // Only update allowed fields
         Object.keys(updateData).forEach(key => {
             if (allowedFields.includes(key) && updateData[key] !== undefined) {
-                updateFields.push(`${key} = ?`);
-                values.push(updateData[key]);
+                updateFields.push(`${key} = '${updateData[key]}'`);
             }
         });
 
@@ -78,10 +76,10 @@ async function updateCategory(categoryID, updateData, connection = null) {
         `;
 
         if (connection) {
-            const [result] = await connection.execute(query, [...values, categoryID]);
+            const [result] = await connection.execute(query);
             return result.affectedRows > 0;
         } else {
-            const [result] = await db.execute(query, [...values, categoryID]);
+            const [result] = await db.execute(query);
             return result.affectedRows > 0;
         }
     } catch (error) {
@@ -92,13 +90,13 @@ async function updateCategory(categoryID, updateData, connection = null) {
 // Delete category
 async function deleteCategory(categoryID, connection = null) {
     try {
-        const query = 'DELETE FROM categories WHERE categoryID = ?';
+        const query = `DELETE FROM categories WHERE categoryID = '${categoryID}'`;
 
         if (connection) {
-            const [result] = await connection.execute(query, [categoryID]);
+            const [result] = await connection.execute(query);
             return result.affectedRows > 0;
         } else {
-            const [result] = await db.execute(query, [categoryID]);
+            const [result] = await db.execute(query);
             return result.affectedRows > 0;
         }
     } catch (error) {
@@ -109,15 +107,13 @@ async function deleteCategory(categoryID, connection = null) {
 // Check if category name exists
 async function checkCategoryNameExists(categoryName, excludeId = null) {
     try {
-        let query = 'SELECT categoryID FROM categories WHERE categoryName = ?';
-        let params = [categoryName];
+        let query = `SELECT categoryID FROM categories WHERE categoryName = '${categoryName}'`;
 
         if (excludeId) {
-            query += ' AND categoryID != ?';
-            params.push(excludeId);
+            query += ` AND categoryID != '${excludeId}'`;
         }
 
-        const [rows] = await db.execute(query, params);
+        const [rows] = await db.execute(query);
         return rows.length > 0;
     } catch (error) {
         throw new Error(`Error checking category name: ${error.message}`);
@@ -128,8 +124,8 @@ async function checkCategoryNameExists(categoryName, excludeId = null) {
 async function updateProductCount(categoryID, increment = true) {
     try {
         const operation = increment ? '+' : '-';
-        const query = `UPDATE categories SET productCount = productCount ${operation} 1 WHERE categoryID = ?`;
-        const [result] = await db.execute(query, [categoryID]);
+        const query = `UPDATE categories SET productCount = productCount ${operation} 1 WHERE categoryID = '${categoryID}'`;
+        const [result] = await db.execute(query);
         return result.affectedRows > 0;
     } catch (error) {
         throw new Error(`Error updating product count: ${error.message}`);

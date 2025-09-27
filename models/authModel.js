@@ -5,8 +5,7 @@ const bcrypt = require('bcryptjs');
 async function checkUsernameExists(username) {
     try {
         const [rows] = await db.execute(
-            'SELECT uid FROM users WHERE username = ?',
-            [username]
+            `SELECT uid FROM users WHERE username = '${username}'`
         );
         return rows.length > 0;
     } catch (error) {
@@ -18,8 +17,7 @@ async function checkUsernameExists(username) {
 async function checkEmailExists(emailID) {
     try {
         const [rows] = await db.execute(
-            'SELECT uid FROM users WHERE emailID = ?',
-            [emailID]
+            `SELECT uid FROM users WHERE emailID = '${emailID}'`
         );
         return rows.length > 0;
     } catch (error) {
@@ -31,8 +29,7 @@ async function checkEmailExists(emailID) {
 async function checkUIDExists(uid) {
     try {
         const [rows] = await db.execute(
-            'SELECT uid FROM users WHERE uid = ?',
-            [uid]
+            `SELECT uid FROM users WHERE uid = '${uid}'`
         );
         return rows.length > 0;
     } catch (error) {
@@ -64,14 +61,13 @@ async function createUser(userData, connection = null) {
         const hashedPassword = await bcrypt.hash(password, saltRounds);
 
         const query = `INSERT INTO users (uid, username, name, emailID, phoneNumber, gstin, password, role, createdAt, updatedAt) 
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`;
-        const params = [uid, username, name, emailID, phoneNumber, gstin, hashedPassword, role];
+                       VALUES ('${uid}', '${username}', '${name}', '${emailID}', '${phoneNumber}', '${gstin}', '${hashedPassword}', '${role}', NOW(), NOW())`;
 
         let result;
         if (connection) {
-            [result] = await connection.execute(query, params);
+            [result] = await connection.execute(query);
         } else {
-            [result] = await db.execute(query, params);
+            [result] = await db.execute(query);
         }
 
         return {
@@ -93,8 +89,7 @@ async function createUser(userData, connection = null) {
 async function getUserByEmail(emailID) {
     try {
         const [rows] = await db.execute(
-            'SELECT * FROM users WHERE emailID = ?',
-            [emailID]
+            `SELECT * FROM users WHERE emailID = '${emailID}'`
         );
         return rows[0] || null;
     } catch (error) {
@@ -106,8 +101,7 @@ async function getUserByEmail(emailID) {
 async function getUserByUsername(username) {
     try {
         const [rows] = await db.execute(
-            'SELECT * FROM users WHERE username = ?',
-            [username]
+            `SELECT * FROM users WHERE username = '${username}'`
         );
         return rows[0] || null;
     } catch (error) {
@@ -119,8 +113,7 @@ async function getUserByUsername(username) {
 async function getUserByUID(uid) {
     try {
         const [rows] = await db.execute(
-            'SELECT * FROM users WHERE uid = ?',
-            [uid]
+            `SELECT * FROM users WHERE uid = '${uid}'`
         );
         return rows[0] || null;
     } catch (error) {
@@ -134,13 +127,12 @@ async function createSession(sessionData, connection = null) {
         const { sessionID, refreshToken, uid, expiry, device } = sessionData;
 
         const query = `INSERT INTO sessions (sessionID, refreshToken, uid, expiry, device, createdAt) 
-                       VALUES (?, ?, ?, ?, ?, NOW())`;
-        const params = [sessionID, refreshToken, uid, expiry, device];
+                       VALUES ('${sessionID}', '${refreshToken}', '${uid}', '${expiry}', '${device}', NOW())`;
 
         if (connection) {
-            await connection.execute(query, params);
+            await connection.execute(query);
         } else {
-            await db.execute(query, params);
+            await db.execute(query);
         }
 
         return { sessionID, uid, expiry };
@@ -153,8 +145,7 @@ async function createSession(sessionData, connection = null) {
 async function deleteSession(sessionID) {
     try {
         await db.execute(
-            'DELETE FROM sessions WHERE sessionID = ?',
-            [sessionID]
+            `DELETE FROM sessions WHERE sessionID = '${sessionID}'`
         );
         return true;
     } catch (error) {
@@ -166,8 +157,7 @@ async function deleteSession(sessionID) {
 async function getSessionByRefreshToken(refreshToken) {
     try {
         const [rows] = await db.execute(
-            'SELECT * FROM sessions WHERE refreshToken = ? AND expiry > NOW()',
-            [refreshToken]
+            `SELECT * FROM sessions WHERE refreshToken = '${refreshToken}' AND expiry > NOW()`
         );
         return rows[0] || null;
     } catch (error) {
@@ -178,14 +168,13 @@ async function getSessionByRefreshToken(refreshToken) {
 // Update session with new refresh token
 async function updateSession(oldRefreshToken, newRefreshToken, newExpiry, connection = null) {
     try {
-        const query = 'UPDATE sessions SET refreshToken = ?, expiry = ? WHERE refreshToken = ?';
-        const params = [newRefreshToken, newExpiry, oldRefreshToken];
+        const query = `UPDATE sessions SET refreshToken = '${newRefreshToken}', expiry = '${newExpiry}' WHERE refreshToken = '${oldRefreshToken}'`;
 
         if (connection) {
-            const [result] = await connection.execute(query, params);
+            const [result] = await connection.execute(query);
             return result.affectedRows > 0;
         } else {
-            const [result] = await db.execute(query, params);
+            const [result] = await db.execute(query);
             return result.affectedRows > 0;
         }
     } catch (error) {
@@ -196,12 +185,12 @@ async function updateSession(oldRefreshToken, newRefreshToken, newExpiry, connec
 // Update user last login
 async function updateLastLogin(uid, connection = null) {
     try {
-        const query = 'UPDATE users SET lastLogin = NOW(), updatedAt = NOW() WHERE uid = ?';
+        const query = `UPDATE users SET lastLogin = NOW(), updatedAt = NOW() WHERE uid = '${uid}'`;
 
         if (connection) {
-            await connection.execute(query, [uid]);
+            await connection.execute(query);
         } else {
-            await db.execute(query, [uid]);
+            await db.execute(query);
         }
 
         return true;
@@ -213,12 +202,12 @@ async function updateLastLogin(uid, connection = null) {
 // Clear all sessions for a user
 async function clearUserSessions(uid, connection = null) {
     try {
-        const query = 'DELETE FROM sessions WHERE uid = ?';
+        const query = `DELETE FROM sessions WHERE uid = '${uid}'`;
 
         if (connection) {
-            await connection.execute(query, [uid]);
+            await connection.execute(query);
         } else {
-            await db.execute(query, [uid]);
+            await db.execute(query);
         }
 
         return true;

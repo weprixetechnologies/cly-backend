@@ -3,7 +3,7 @@ const db = require('../utils/dbconnect');
 // Get all users with pagination and filters
 const getAllUsers = async ({ page, limit, search, status, role }) => {
     try {
-        // Ensure limit and page are integers
+        // Ensure limit and page are integers with proper defaults
         const pageNum = parseInt(page) || 1;
         const limitNum = parseInt(limit) || 10;
         const offset = (pageNum - 1) * limitNum;
@@ -12,19 +12,19 @@ const getAllUsers = async ({ page, limit, search, status, role }) => {
         let queryParams = [];
 
         // Search filter
-        if (search) {
+        if (search && search.trim() !== '') {
             whereConditions.push(`(name LIKE ? OR username LIKE ? OR emailID LIKE ?)`);
             queryParams.push(`%${search}%`, `%${search}%`, `%${search}%`);
         }
 
         // Status filter
-        if (status !== 'all') {
+        if (status && status !== 'all') {
             whereConditions.push(`status = ?`);
             queryParams.push(status);
         }
 
         // Role filter
-        if (role !== 'all') {
+        if (role && role !== 'all') {
             whereConditions.push(`role = ?`);
             queryParams.push(role);
         }
@@ -36,19 +36,18 @@ const getAllUsers = async ({ page, limit, search, status, role }) => {
         const [countResult] = await db.execute(countQuery, queryParams);
         const totalUsers = countResult[0].total;
 
-        // Get users with pagination
+        // Get users with pagination - directly inject LIMIT and OFFSET values
         const usersQuery = `
-      SELECT 
-        uid, username, name, photo, emailID, phoneNumber, gstin, 
-        outstanding, createdAt, updatedAt, lastLogin, status, role
-      FROM users 
-      ${whereClause}
-      ORDER BY createdAt DESC 
-      LIMIT ? OFFSET ?
-    `;
+            SELECT 
+                uid, username, name, photo, emailID, phoneNumber, gstin, 
+                outstanding, createdAt, updatedAt, lastLogin, status, role
+            FROM users 
+            ${whereClause}
+            ORDER BY createdAt DESC 
+            LIMIT ${limitNum} OFFSET ${offset}
+        `;
 
-        // Ensure limit and offset are integers
-        const users = await db.execute(usersQuery, [...queryParams, parseInt(limitNum), parseInt(offset)]);
+        const users = await db.execute(usersQuery, queryParams);
         const totalPages = Math.ceil(totalUsers / limitNum);
 
         return {

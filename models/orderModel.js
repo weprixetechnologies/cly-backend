@@ -18,8 +18,7 @@ async function createOrderFromCart(uid, items) {
             const { productID, productName, boxQty = 0, packQty = 0, units = 0, featuredImage } = item;
             await connection.execute(
                 `INSERT INTO orders (orderID, productID, productName, boxQty, packQty, units, featuredImage, uid, orderStatus)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
-                [orderID, productID, productName, boxQty, packQty, units, featuredImage || '', uid]
+                 VALUES ('${orderID}', '${productID}', '${productName}', ${boxQty}, ${packQty}, ${units}, '${featuredImage || ''}', '${uid}', 'pending')`
             );
         }
 
@@ -37,8 +36,7 @@ async function createOrderFromCart(uid, items) {
 async function getOrdersByUser(uid) {
     try {
         const [rows] = await db.execute(
-            `SELECT * FROM orders WHERE uid = ? ORDER BY orderID DESC`,
-            [uid]
+            `SELECT * FROM orders WHERE uid = '${uid}' ORDER BY orderID DESC`
         );
         return rows;
     } catch (error) {
@@ -50,8 +48,7 @@ async function getOrdersByUser(uid) {
 async function getOrderById(orderID) {
     try {
         const [rows] = await db.execute(
-            `SELECT * FROM orders WHERE orderID = ?`,
-            [orderID]
+            `SELECT * FROM orders WHERE orderID = '${orderID}'`
         );
         return rows;
     } catch (error) {
@@ -63,8 +60,7 @@ async function getOrderById(orderID) {
 async function updateOrderStatus(orderID, orderStatus) {
     try {
         const [result] = await db.execute(
-            `UPDATE orders SET orderStatus = ? WHERE orderID = ?`,
-            [orderStatus, orderID]
+            `UPDATE orders SET orderStatus = '${orderStatus}' WHERE orderID = '${orderID}'`
         );
         return result.affectedRows > 0;
     } catch (error) {
@@ -85,37 +81,35 @@ async function getAllOrders(filters = {}) {
             dateTo = ''
         } = filters;
 
-        const offset = (page - 1) * limit;
+        // Ensure page and limit are integers
+        const pageNum = parseInt(page) || 1;
+        const limitNum = parseInt(limit) || 10;
+        const offset = (pageNum - 1) * limitNum;
+
         const params = [];
         let whereConditions = [];
 
         // Status filter
         if (status && status !== 'all') {
-            whereConditions.push('orderStatus = ?');
-            params.push(status);
+            whereConditions.push(`orderStatus = '${status}'`);
         }
 
         // Payment mode filter
         if (paymentMode && paymentMode !== 'all') {
-            whereConditions.push('paymentMode = ?');
-            params.push(paymentMode);
+            whereConditions.push(`paymentMode = '${paymentMode}'`);
         }
 
         // Search filter (orderID, uid, productName)
         if (search) {
-            whereConditions.push('(orderID LIKE ? OR uid LIKE ? OR productName LIKE ?)');
-            const searchTerm = `%${search}%`;
-            params.push(searchTerm, searchTerm, searchTerm);
+            whereConditions.push(`(orderID LIKE '%${search}%' OR uid LIKE '%${search}%' OR productName LIKE '%${search}%')`);
         }
 
         // Date range filter
         if (dateFrom) {
-            whereConditions.push('DATE(createdAt) >= ?');
-            params.push(dateFrom);
+            whereConditions.push(`DATE(createdAt) >= '${dateFrom}'`);
         }
         if (dateTo) {
-            whereConditions.push('DATE(createdAt) <= ?');
-            params.push(dateTo);
+            whereConditions.push(`DATE(createdAt) <= '${dateTo}'`);
         }
 
         const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
@@ -126,10 +120,10 @@ async function getAllOrders(filters = {}) {
             FROM orders 
             ${whereClause}
         `;
-        const [countResult] = await db.execute(countQuery, params);
+        const [countResult] = await db.execute(countQuery);
         const total = countResult[0].total;
 
-        // Get orders with pagination
+        // Get orders with pagination - directly inject LIMIT and OFFSET values
         const ordersQuery = `
             SELECT 
                 orderID,
@@ -145,18 +139,18 @@ async function getAllOrders(filters = {}) {
             ${whereClause}
             GROUP BY orderID
             ORDER BY orderID DESC
-            LIMIT ? OFFSET ?
+            LIMIT ${limitNum} OFFSET ${offset}
         `;
 
-        const [rows] = await db.execute(ordersQuery, [...params, limit, offset]);
+        const [rows] = await db.execute(ordersQuery);
 
         return {
             orders: rows,
             pagination: {
-                page: parseInt(page),
-                limit: parseInt(limit),
+                page: pageNum,
+                limit: limitNum,
                 total: parseInt(total),
-                totalPages: Math.ceil(total / limit)
+                totalPages: Math.ceil(total / limitNum)
             }
         };
     } catch (error) {
@@ -172,8 +166,7 @@ async function deductInventoryForOrder(orderID) {
 
         // Get all line items for this order
         const [items] = await connection.execute(
-            `SELECT productID, boxQty, packQty, units FROM orders WHERE orderID = ?`,
-            [orderID]
+            `SELECT productID, boxQty, packQty, units FROM orders WHERE orderID = '${orderID}'`
         );
 
         // For each product, reduce inventory by total requested quantity
@@ -183,8 +176,7 @@ async function deductInventoryForOrder(orderID) {
 
             // Fetch current inventory
             const [prodRows] = await connection.execute(
-                `SELECT inventory FROM products WHERE productID = ? FOR UPDATE`,
-                [item.productID]
+                `SELECT inventory FROM products WHERE productID = '${item.productID}' FOR UPDATE`
             );
             if (!prodRows || prodRows.length === 0) continue; // Skip missing products silently
 
@@ -192,8 +184,7 @@ async function deductInventoryForOrder(orderID) {
             const newInventory = Math.max(0, currentInventory - totalRequested);
 
             await connection.execute(
-                `UPDATE products SET inventory = ?, updatedAt = CURRENT_TIMESTAMP WHERE productID = ?`,
-                [newInventory, item.productID]
+                `UPDATE products SET inventory = ${newInventory}, updatedAt = CURRENT_TIMESTAMP WHERE productID = '${item.productID}'`
             );
         }
 
@@ -214,8 +205,7 @@ async function calculateOrderTotal(orderID) {
             `SELECT o.productID, o.boxQty, o.packQty, o.units, p.productPrice
              FROM orders o
              JOIN products p ON p.productID = o.productID
-             WHERE o.orderID = ?`,
-            [orderID]
+             WHERE o.orderID = '${orderID}'`
         );
 
         let total = 0;
@@ -236,8 +226,7 @@ async function addOutstanding(uid, amount) {
         const inc = Number(amount || 0);
         if (!Number.isFinite(inc)) return false;
         const [result] = await db.execute(
-            `UPDATE users SET outstanding = COALESCE(outstanding,0) + ? WHERE uid = ?`,
-            [inc, uid]
+            `UPDATE users SET outstanding = COALESCE(outstanding,0) + ${inc} WHERE uid = '${uid}'`
         );
         return result.affectedRows > 0;
     } catch (error) {
@@ -251,8 +240,7 @@ async function subtractOutstanding(uid, amount) {
         const dec = Number(amount || 0);
         if (!Number.isFinite(dec)) return false;
         const [result] = await db.execute(
-            `UPDATE users SET outstanding = GREATEST(COALESCE(outstanding,0) - ?, 0) WHERE uid = ?`,
-            [dec, uid]
+            `UPDATE users SET outstanding = GREATEST(COALESCE(outstanding,0) - ${dec}, 0) WHERE uid = '${uid}'`
         );
         return result.affectedRows > 0;
     } catch (error) {
