@@ -26,7 +26,7 @@ const addProduct = async (req, res) => {
         }
 
         // Validate price
-        if (isNaN(productPrice) || productPrice <= 0) {
+        if (productPrice != null && (isNaN(productPrice) || productPrice <= 0)) {
             return res.status(400).json({
                 success: false,
                 message: 'Product price must be a valid positive number'
@@ -344,58 +344,124 @@ const createCategory = async (req, res) => {
 // Update inventory by SKU
 const updateInventoryBySku = async (req, res) => {
     try {
-        const { productName, productPrice, sku, inventory } = req.body;
+        const products = req.body;
 
-        // Validate required fields
-        if (!sku || inventory === undefined) {
+        // Validate that products is an array
+        if (!Array.isArray(products)) {
             return res.status(400).json({
                 success: false,
-                message: 'SKU and inventory are required'
+                message: 'Request body must be an array of products'
             });
         }
 
-        // Validate inventory is a number
-        if (isNaN(inventory) || inventory < 0) {
+        // Validate that array is not empty
+        if (products.length === 0) {
             return res.status(400).json({
                 success: false,
-                message: 'Inventory must be a valid non-negative number'
+                message: 'Products array cannot be empty'
             });
         }
 
-        // Check if SKU exists
-        const existingProduct = await productModel.checkSkuExists(sku);
-        if (!existingProduct) {
-            return res.status(404).json({
-                success: false,
-                message: `Product with SKU '${sku}' not found`,
-                data: {
-                    sku,
-                    found: false
+        const results = [];
+        const errors = [];
+
+        // Process each product in the array
+        for (let i = 0; i < products.length; i++) {
+            const { productName, productPrice, sku, inventory } = products[i];
+
+            try {
+                // Validate required fields for this product
+                if (!sku || inventory === undefined) {
+                    errors.push({
+                        index: i,
+                        sku: sku || 'undefined',
+                        error: 'SKU and inventory are required'
+                    });
+                    continue;
                 }
-            });
+
+                // Validate inventory is a number
+                if (isNaN(inventory) || inventory < 0) {
+                    errors.push({
+                        index: i,
+                        sku,
+                        error: 'Inventory must be a valid non-negative number'
+                    });
+                    continue;
+                }
+
+                // Check if SKU exists
+                const existingProduct = await productModel.checkSkuExists(sku);
+                if (!existingProduct) {
+                    errors.push({
+                        index: i,
+                        sku,
+                        error: 'Product with SKU not found',
+                        found: false
+                    });
+                    continue;
+                }
+
+                // Update inventory
+                const result = await productModel.updateInventoryBySku(sku, parseInt(inventory));
+
+                if (result.affectedRows === 0) {
+                    errors.push({
+                        index: i,
+                        sku,
+                        error: 'No changes made to the inventory'
+                    });
+                    continue;
+                }
+
+                // Add to successful results
+                results.push({
+                    index: i,
+                    sku,
+                    productName: existingProduct.productName,
+                    oldInventory: existingProduct.inventory,
+                    newInventory: parseInt(inventory),
+                    updated: true
+                });
+
+            } catch (productError) {
+                errors.push({
+                    index: i,
+                    sku: sku || 'undefined',
+                    error: `Failed to process: ${productError.message}`
+                });
+            }
         }
 
-        // Update inventory
-        const result = await productModel.updateInventoryBySku(sku, parseInt(inventory));
+        // Prepare response
+        const response = {
+            success: true,
+            message: `Processed ${products.length} products`,
+            data: {
+                totalProcessed: products.length,
+                successful: results.length,
+                failed: errors.length,
+                results,
+                errors
+            }
+        };
 
-        if (result.affectedRows === 0) {
+        // If all products failed, return 400
+        if (results.length === 0) {
             return res.status(400).json({
                 success: false,
-                message: 'No changes made to the inventory'
+                message: 'All products failed to update',
+                data: response.data
             });
         }
 
-        res.status(200).json({
-            success: true,
-            message: 'Inventory updated successfully',
-            data: {
-                sku,
-                productName: existingProduct.productName,
-                oldInventory: existingProduct.inventory,
-                newInventory: parseInt(inventory),
-                updated: true
-            }
-        });
+        // If some products failed, return 207 (Multi-Status)
+        if (errors.length > 0) {
+            return res.status(207).json(response);
+        }
+
+        // If all products succeeded, return 200
+        res.status(200).json(response);
 
     } catch (error) {
         console.error('Error updating inventory by SKU:', error);
