@@ -26,13 +26,40 @@ const placeOrder = async (req, res) => {
             return res.status(400).json({ success: false, message: 'No items to place order' });
         }
 
-        const { orderID } = await orderModel.createOrderFromCart(uid, items);
+        // Extract order details from request body
+        const { address, paymentMode, couponCode } = req.body;
+
+        // Validate required fields
+        if (!address) {
+            return res.status(400).json({ success: false, message: 'Delivery address is required' });
+        }
+
+        if (!paymentMode) {
+            return res.status(400).json({ success: false, message: 'Payment mode is required' });
+        }
+
+        const orderData = {
+            uid,
+            items,
+            address,
+            paymentMode,
+            couponCode: couponCode || null
+        };
+
+        const { orderID } = await orderModel.createOrderFromCart(orderData);
 
         if (shouldClear) {
             try { await cartModel.clearCart(uid); } catch (_) { }
         }
 
-        return res.status(201).json({ success: true, message: 'Order created', data: { orderID } });
+        return res.status(201).json({
+            success: true,
+            message: 'Order created',
+            data: {
+                orderID,
+                paymentMode: paymentMode
+            }
+        });
     } catch (error) {
         return res.status(500).json({ success: false, message: 'Failed to place order', error: error.message });
     }

@@ -17,7 +17,9 @@ const orderRouter = require('./routers/orderRouter.js');
 app.use(cors({
     origin: [
         'http://localhost:3000',                // for local dev
-        'https://clyadmin.onrender.com'    // your deployed Next.js frontend
+        'http://localhost:3002',                // for local dev
+        'https://clyadmin.onrender.com',
+        'http://192.168.1.12:3002'    // your deployed Next.js frontend
     ],
     credentials: true
 }));
@@ -42,6 +44,6 @@ app.use('/api/order', orderRouter);
 
 
 
-app.listen(process.env.PORT, () => {
+app.listen(3300, () => {
     console.log(`Server started on port 3300`);
 });

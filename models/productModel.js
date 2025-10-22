@@ -197,6 +197,36 @@ async function getCategories() {
     }
 }
 
+// Get products by category
+async function getProductsByCategory(categoryID, page = 1, limit = 24) {
+    try {
+        // Ensure page and limit are integers
+        const pageNum = parseInt(page) || 1;
+        const limitNum = parseInt(limit) || 24;
+        const offset = (pageNum - 1) * limitNum;
+
+        const query = `SELECT * FROM products WHERE categoryID = '${categoryID}' AND status = 'active' ORDER BY createdAt DESC LIMIT ${limitNum} OFFSET ${offset}`;
+        const [rows] = await db.execute(query);
+
+        // Get total count for pagination
+        const countQuery = `SELECT COUNT(*) as total FROM products WHERE categoryID = '${categoryID}' AND status = 'active'`;
+        const [countResult] = await db.execute(countQuery);
+        const total = countResult[0].total;
+
+        return {
+            products: rows,
+            pagination: {
+                page: pageNum,
+                limit: limitNum,
+                total,
+                totalPages: Math.ceil(total / limitNum)
+            }
+        };
+    } catch (error) {
+        throw new Error(`Error fetching products by category: ${error.message}`);
+    }
+}
+
 // Create category
 async function createCategory(categoryData) {
     try {
@@ -224,5 +254,6 @@ module.exports = {
     updateProduct,
     deleteProduct,
     getCategories,
-    createCategory
+    createCategory,
+    getProductsByCategory
 };

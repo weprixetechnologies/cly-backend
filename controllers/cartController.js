@@ -4,7 +4,10 @@ const orderModel = require('../models/orderModel');
 // Get current user's cart
 const getCart = async (req, res) => {
     try {
-        const { uid } = req.params;
+        const uid = req.user?.uid || req.params?.uid;
+        if (!uid) {
+            return res.status(401).json({ success: false, message: 'Unauthorized: missing uid' });
+        }
         const cart = await cartModel.getCartByUser(uid);
         res.status(200).json({ success: true, data: cart });
     } catch (error) {
@@ -15,7 +18,10 @@ const getCart = async (req, res) => {
 // Add item to cart (incremental)
 const addToCart = async (req, res) => {
     try {
-        const { uid } = req.params;
+        const uid = req.user?.uid || req.params?.uid;
+        if (!uid) {
+            return res.status(401).json({ success: false, message: 'Unauthorized: missing uid' });
+        }
         const item = req.body;
         if (!item || !item.productID || (!item.boxQty && !item.packQty && !item.units)) {
             return res.status(400).json({ success: false, message: 'Invalid cart item' });
@@ -31,7 +37,11 @@ const addToCart = async (req, res) => {
 // Update cart item quantities (set)
 const updateCartItem = async (req, res) => {
     try {
-        const { uid, productID } = req.params;
+        const uid = req.user?.uid || req.params?.uid;
+        const { productID } = req.params;
+        if (!uid) {
+            return res.status(401).json({ success: false, message: 'Unauthorized: missing uid' });
+        }
         const { boxQty = 0, packQty = 0, units = 0 } = req.body;
         const ok = await cartModel.updateCartItem(uid, productID, { boxQty, packQty, units });
         if (!ok) return res.status(404).json({ success: false, message: 'Item not found' });
@@ -45,7 +55,11 @@ const updateCartItem = async (req, res) => {
 // Remove item
 const removeCartItem = async (req, res) => {
     try {
-        const { uid, productID } = req.params;
+        const uid = req.user?.uid || req.params?.uid;
+        const { productID } = req.params;
+        if (!uid) {
+            return res.status(401).json({ success: false, message: 'Unauthorized: missing uid' });
+        }
         const ok = await cartModel.removeCartItem(uid, productID);
         if (!ok) return res.status(404).json({ success: false, message: 'Item not found' });
         const cart = await cartModel.getCartByUser(uid);
@@ -58,7 +72,10 @@ const removeCartItem = async (req, res) => {
 // Clear cart
 const clearCart = async (req, res) => {
     try {
-        const { uid } = req.params;
+        const uid = req.user?.uid || req.params?.uid;
+        if (!uid) {
+            return res.status(401).json({ success: false, message: 'Unauthorized: missing uid' });
+        }
         await cartModel.clearCart(uid);
         res.status(200).json({ success: true, message: 'Cart cleared' });
     } catch (error) {
@@ -69,7 +86,10 @@ const clearCart = async (req, res) => {
 // Checkout: create order from cart and optionally clear
 const checkout = async (req, res) => {
     try {
-        const { uid } = req.params;
+        const uid = req.user?.uid || req.params?.uid;
+        if (!uid) {
+            return res.status(401).json({ success: false, message: 'Unauthorized: missing uid' });
+        }
         const { clear = true } = req.body || {};
         const cart = await cartModel.getCartByUser(uid);
         if (!cart.items || cart.items.length === 0) {

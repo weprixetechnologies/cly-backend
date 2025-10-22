@@ -10,6 +10,7 @@ const router = express.Router();
 // Product routes
 router.post('/add', productController.addProduct);
 router.get('/list', productController.getAllProducts);
+router.get('/by-category/:categoryID', productController.getProductsByCategory);
 router.get('/:productID', productController.getProductById);
 router.put('/:productID', productController.updateProduct);
 router.delete('/:productID', productController.deleteProduct);

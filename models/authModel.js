@@ -126,8 +126,13 @@ async function createSession(sessionData, connection = null) {
     try {
         const { sessionID, refreshToken, uid, expiry, device } = sessionData;
 
+        // Convert Date object to MySQL datetime format (YYYY-MM-DD HH:MM:SS)
+        const formattedExpiry = expiry instanceof Date ?
+            expiry.toISOString().slice(0, 19).replace('T', ' ') :
+            expiry;
+
         const query = `INSERT INTO sessions (sessionID, refreshToken, uid, expiry, device, createdAt) 
-                       VALUES ('${sessionID}', '${refreshToken}', '${uid}', '${expiry}', '${device}', NOW())`;
+                       VALUES ('${sessionID}', '${refreshToken}', '${uid}', '${formattedExpiry}', '${device}', NOW())`;
 
         if (connection) {
             await connection.execute(query);
@@ -168,7 +173,12 @@ async function getSessionByRefreshToken(refreshToken) {
 // Update session with new refresh token
 async function updateSession(oldRefreshToken, newRefreshToken, newExpiry, connection = null) {
     try {
-        const query = `UPDATE sessions SET refreshToken = '${newRefreshToken}', expiry = '${newExpiry}' WHERE refreshToken = '${oldRefreshToken}'`;
+        // Convert Date object to MySQL datetime format (YYYY-MM-DD HH:MM:SS)
+        const formattedExpiry = newExpiry instanceof Date ?
+            newExpiry.toISOString().slice(0, 19).replace('T', ' ') :
+            newExpiry;
+
+        const query = `UPDATE sessions SET refreshToken = '${newRefreshToken}', expiry = '${formattedExpiry}' WHERE refreshToken = '${oldRefreshToken}'`;
 
         if (connection) {
             const [result] = await connection.execute(query);

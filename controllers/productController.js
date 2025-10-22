@@ -258,6 +258,36 @@ const deleteProduct = async (req, res) => {
     }
 };
 
+// Get products by category
+const getProductsByCategory = async (req, res) => {
+    try {
+        const { categoryID } = req.params;
+        const { page = 1, limit = 24 } = req.query;
+
+        if (!categoryID) {
+            return res.status(400).json({
+                success: false,
+                message: 'Category ID is required'
+            });
+        }
+
+        const result = await productModel.getProductsByCategory(categoryID, page, limit);
+
+        res.status(200).json({
+            success: true,
+            data: result
+        });
+
+    } catch (error) {
+        console.error('Error fetching products by category:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch products by category',
+            error: error.message
+        });
+    }
+};
+
 // Get categories
 const getCategories = async (req, res) => {
     try {
@@ -321,6 +351,7 @@ module.exports = {
     getProductById,
     updateProduct,
     deleteProduct,
+    getProductsByCategory,
     getCategories,
     createCategory
 };

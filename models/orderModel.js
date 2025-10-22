@@ -6,19 +6,46 @@ function generateOrderID() {
 }
 
 // Create order from cart items
-async function createOrderFromCart(uid, items) {
+async function createOrderFromCart(orderData) {
     const connection = await db.getConnection();
     try {
         await connection.beginTransaction();
 
         const orderID = generateOrderID();
+        const { uid, items, address, paymentMode, couponCode } = orderData;
 
-        // Insert rows in orders table for each item
-        for (const item of items) {
-            const { productID, productName, boxQty = 0, packQty = 0, units = 0, featuredImage } = item;
+        // Consolidate duplicate products (sum quantities) to satisfy unique (orderID, productID)
+        const productIdToTotals = new Map();
+        for (const item of items || []) {
+            const key = String(item.productID);
+            const prev = productIdToTotals.get(key) || { productID: item.productID, productName: item.productName, featuredImage: item.featuredImage || '', boxQty: 0, packQty: 0, units: 0 };
+            prev.boxQty += Number(item.boxQty || 0);
+            prev.packQty += Number(item.packQty || 0);
+            prev.units += Number(item.units || 0);
+            // prefer first non-empty name/image
+            if (!prev.productName && item.productName) prev.productName = item.productName;
+            if (!prev.featuredImage && item.featuredImage) prev.featuredImage = item.featuredImage;
+            productIdToTotals.set(key, prev);
+        }
+
+        // Insert one row per unique productID with address and payment details
+        for (const consolidated of productIdToTotals.values()) {
+            const { productID, productName, boxQty = 0, packQty = 0, units = 0, featuredImage } = consolidated;
+
+            // Prepare address fields
+            const deliveryName = address?.name || '';
+            const deliveryPhone = address?.phone || '';
+            const deliveryAddress = [
+                address?.addressLine1 || '',
+                address?.addressLine2 || '',
+                address?.city || '',
+                address?.state || '',
+                address?.pincode || ''
+            ].filter(Boolean).join(', ');
+
             await connection.execute(
-                `INSERT INTO orders (orderID, productID, productName, boxQty, packQty, units, featuredImage, uid, orderStatus)
-                 VALUES ('${orderID}', '${productID}', '${productName}', ${boxQty}, ${packQty}, ${units}, '${featuredImage || ''}', '${uid}', 'pending')`
+                `INSERT INTO orders (orderID, productID, productName, boxQty, packQty, units, featuredImage, uid, orderStatus, addressName, addressPhone, addressLine1, addressLine2, addressCity, addressState, addressPincode, paymentMode, couponCode)
+                 VALUES ('${orderID}', '${productID}', '${productName}', ${boxQty}, ${packQty}, ${units}, '${featuredImage || ''}', '${uid}', 'pending', '${deliveryName}', '${deliveryPhone}', '${address?.addressLine1 || ''}', '${address?.addressLine2 || ''}', '${address?.city || ''}', '${address?.state || ''}', '${address?.pincode || ''}', '${paymentMode || 'COD'}', '${couponCode || ''}')`
             );
         }
 
@@ -169,9 +196,9 @@ async function deductInventoryForOrder(orderID) {
             `SELECT productID, boxQty, packQty, units FROM orders WHERE orderID = '${orderID}'`
         );
 
-        // For each product, reduce inventory by total requested quantity
+        // For each product, reduce inventory by units only (business rule)
         for (const item of items) {
-            const totalRequested = (item.units || 0) + (item.packQty || 0) + (item.boxQty || 0);
+            const totalRequested = (item.units || 0);
             if (totalRequested <= 0) continue;
 
             // Fetch current inventory
