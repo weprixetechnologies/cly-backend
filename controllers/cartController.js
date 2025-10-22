@@ -1,5 +1,6 @@
 const cartModel = require('../models/cartModel');
 const orderModel = require('../models/orderModel');
+const productModel = require('../models/productModel');
 
 // Get current user's cart
 const getCart = async (req, res) => {
@@ -15,6 +16,25 @@ const getCart = async (req, res) => {
     }
 };
 
+// Validate quantity against minQty
+const validateQuantity = async (productID, totalQuantity) => {
+    try {
+        const product = await productModel.getProductById(productID);
+        if (!product) {
+            throw new Error('Product not found');
+        }
+
+        const minQty = product.minQty || 1;
+        if (totalQuantity % minQty !== 0) {
+            throw new Error(`Quantity must be a multiple of ${minQty}`);
+        }
+
+        return true;
+    } catch (error) {
+        throw new Error(`Validation failed: ${error.message}`);
+    }
+};
+
 // Add item to cart (incremental)
 const addToCart = async (req, res) => {
     try {
@@ -23,14 +43,21 @@ const addToCart = async (req, res) => {
             return res.status(401).json({ success: false, message: 'Unauthorized: missing uid' });
         }
         const item = req.body;
-        if (!item || !item.productID || (!item.boxQty && !item.packQty && !item.units)) {
+        if (!item || !item.productID || (!item.boxQty && !item.units)) {
             return res.status(400).json({ success: false, message: 'Invalid cart item' });
         }
+
+        // Calculate total quantity
+        const totalQuantity = (item.boxQty || 0) + (item.units || 0);
+
+        // Validate quantity against minQty
+        await validateQuantity(item.productID, totalQuantity);
+
         await cartModel.upsertCartItem(uid, item);
         const cart = await cartModel.getCartByUser(uid);
         res.status(200).json({ success: true, message: 'Added to cart', data: cart });
     } catch (error) {
-        res.status(500).json({ success: false, message: 'Failed to add to cart', error: error.message });
+        res.status(400).json({ success: false, message: error.message });
     }
 };
 
@@ -42,13 +69,20 @@ const updateCartItem = async (req, res) => {
         if (!uid) {
             return res.status(401).json({ success: false, message: 'Unauthorized: missing uid' });
         }
-        const { boxQty = 0, packQty = 0, units = 0 } = req.body;
-        const ok = await cartModel.updateCartItem(uid, productID, { boxQty, packQty, units });
+        const { boxQty = 0, units = 0 } = req.body;
+
+        // Calculate total quantity
+        const totalQuantity = (boxQty || 0) + (units || 0);
+
+        // Validate quantity against minQty
+        await validateQuantity(productID, totalQuantity);
+
+        const ok = await cartModel.updateCartItem(uid, productID, { boxQty, units });
         if (!ok) return res.status(404).json({ success: false, message: 'Item not found' });
         const cart = await cartModel.getCartByUser(uid);
         res.status(200).json({ success: true, message: 'Cart updated', data: cart });
     } catch (error) {
-        res.status(500).json({ success: false, message: 'Failed to update cart', error: error.message });
+        res.status(400).json({ success: false, message: error.message });
     }
 };
 

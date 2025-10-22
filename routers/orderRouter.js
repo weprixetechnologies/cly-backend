@@ -65,7 +65,7 @@ router.put('/admin/:orderID/status', async (req, res) => {
         const ok = await orderModel.updateOrderStatus(orderID, orderStatus);
         if (!ok) return res.status(200).json({ success: false, message: 'Failed to update order status' });
 
-        // On accept, add order total to user's outstanding AND deduct inventory
+        // On accept, add order total to user's outstanding
         if (orderStatus === 'accepted' && previousStatus !== 'accepted') {
             try {
                 const items = await orderModel.getOrderById(orderID);
@@ -74,14 +74,13 @@ router.put('/admin/:orderID/status', async (req, res) => {
                     const total = await orderModel.calculateOrderTotal(orderID);
                     await orderModel.addOutstanding(uid, total);
                 }
-                await orderModel.deductInventoryForOrder(orderID);
             } catch (e) {
                 console.error('[orderRouter] accept side-effects failed:', e.message);
                 // proceed without failing request
             }
         }
 
-        // If forcing from accepted -> rejected, subtract outstanding (use captured previousStatus)
+        // If forcing from accepted -> rejected, subtract outstanding
         if (orderStatus === 'rejected' && previousStatus === 'accepted') {
             try {
                 const items = await orderModel.getOrderById(orderID);
@@ -90,7 +89,6 @@ router.put('/admin/:orderID/status', async (req, res) => {
                     const total = await orderModel.calculateOrderTotal(orderID);
                     await orderModel.subtractOutstanding(uid, total);
                 }
-                // Note: We do NOT restore inventory automatically to avoid overselling inconsistencies.
             } catch (e) {
                 console.error('[orderRouter] outstanding decrease failed:', e.message);
                 // proceed without failing request

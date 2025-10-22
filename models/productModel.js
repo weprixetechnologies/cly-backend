@@ -32,7 +32,8 @@ async function generateUniqueProductID() {
 async function checkProductIDExists(productID) {
     try {
         const [rows] = await db.execute(
-            `SELECT productID FROM products WHERE productID = '${productID}'`
+            'SELECT productID FROM products WHERE productID = ?',
+            [productID]
         );
         return rows.length > 0;
     } catch (error) {
@@ -51,7 +52,6 @@ async function createProduct(productData) {
             sku,
             description,
             boxQty,
-            packQty,
             minQty,
             categoryID,
             categoryName,
@@ -61,11 +61,21 @@ async function createProduct(productData) {
         } = productData;
 
         const [result] = await db.execute(
-            `INSERT INTO products (
-                productID, productName, productPrice, sku, description, 
-                boxQty, packQty, minQty, categoryID, categoryName, 
-                featuredImages, galleryImages, inventory
-            ) VALUES ('${productID}', '${productName}', ${productPrice}, '${sku}', '${description}', ${boxQty}, ${packQty}, ${minQty}, '${categoryID}', '${categoryName}', '${featuredImages}', '${JSON.stringify(galleryImages)}', ${inventory})`
+            'INSERT INTO products (\n                productID, productName, productPrice, sku, description, \n                boxQty, minQty, categoryID, categoryName, \n                featuredImages, galleryImages, inventory\n            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [
+                productID,
+                productName,
+                productPrice,
+                sku,
+                description,
+                boxQty,
+                minQty,
+                categoryID,
+                categoryName,
+                featuredImages,
+                JSON.stringify(galleryImages),
+                inventory
+            ]
         );
 
         return {
@@ -90,22 +100,25 @@ async function getAllProducts(page = 1, limit = 10, search = '') {
         let params = [];
 
         if (search) {
-            query += ` AND (productName LIKE '%${search}%' OR sku LIKE '%${search}%' OR categoryName LIKE '%${search}%')`;
+            query += ` AND (productName LIKE ? OR sku LIKE ? OR categoryName LIKE ?)`;
+            params.push(`%${search}%`, `%${search}%`, `%${search}%`);
         }
 
-        query += ` ORDER BY createdAt DESC LIMIT ${limitNum} OFFSET ${offset}`;
+        query += ` ORDER BY createdAt DESC LIMIT ? OFFSET ?`;
+        params.push(limitNum, offset);
 
-        const [rows] = await db.execute(query);
+        const [rows] = await db.execute(query, params);
 
         // Get total count for pagination
         let countQuery = 'SELECT COUNT(*) as total FROM products WHERE 1=1';
         let countParams = [];
 
         if (search) {
-            countQuery += ` AND (productName LIKE '%${search}%' OR sku LIKE '%${search}%' OR categoryName LIKE '%${search}%')`;
+            countQuery += ` AND (productName LIKE ? OR sku LIKE ? OR categoryName LIKE ?)`;
+            countParams.push(`%${search}%`, `%${search}%`, `%${search}%`);
         }
 
-        const [countResult] = await db.execute(countQuery);
+        const [countResult] = await db.execute(countQuery, countParams);
         const total = countResult[0].total;
 
         return {
@@ -126,7 +139,8 @@ async function getAllProducts(page = 1, limit = 10, search = '') {
 async function getProductById(productID) {
     try {
         const [rows] = await db.execute(
-            `SELECT * FROM products WHERE productID = '${productID}'`
+            'SELECT * FROM products WHERE productID = ?',
+            [productID]
         );
         return rows[0] || null;
     } catch (error) {
@@ -143,7 +157,6 @@ async function updateProduct(productID, productData) {
             sku,
             description,
             boxQty,
-            packQty,
             minQty,
             categoryID,
             categoryName,
@@ -154,12 +167,22 @@ async function updateProduct(productID, productData) {
         } = productData;
 
         const [result] = await db.execute(
-            `UPDATE products SET 
-                productName = '${productName}', productPrice = ${productPrice}, sku = '${sku}', description = '${description}',
-                boxQty = ${boxQty}, packQty = ${packQty}, minQty = ${minQty}, categoryID = '${categoryID}', categoryName = '${categoryName}',
-                featuredImages = '${featuredImages}', galleryImages = '${JSON.stringify(galleryImages)}', inventory = ${inventory}, status = '${status}',
-                updatedAt = CURRENT_TIMESTAMP
-            WHERE productID = '${productID}'`
+            'UPDATE products SET \n                productName = ?, productPrice = ?, sku = ?, description = ?,\n                boxQty = ?, minQty = ?, categoryID = ?, categoryName = ?,\n                featuredImages = ?, galleryImages = ?, inventory = ?, status = ?,\n                updatedAt = CURRENT_TIMESTAMP\n            WHERE productID = ?',
+            [
+                productName,
+                productPrice,
+                sku,
+                description,
+                boxQty,
+                minQty,
+                categoryID,
+                categoryName,
+                featuredImages,
+                JSON.stringify(galleryImages),
+                inventory,
+                status,
+                productID
+            ]
         );
 
         return {
@@ -175,7 +198,8 @@ async function updateProduct(productID, productData) {
 async function deleteProduct(productID) {
     try {
         const [result] = await db.execute(
-            `DELETE FROM products WHERE productID = '${productID}'`
+            'DELETE FROM products WHERE productID = ?',
+            [productID]
         );
         return {
             affectedRows: result.affectedRows
@@ -205,12 +229,12 @@ async function getProductsByCategory(categoryID, page = 1, limit = 24) {
         const limitNum = parseInt(limit) || 24;
         const offset = (pageNum - 1) * limitNum;
 
-        const query = `SELECT * FROM products WHERE categoryID = '${categoryID}' AND status = 'active' ORDER BY createdAt DESC LIMIT ${limitNum} OFFSET ${offset}`;
-        const [rows] = await db.execute(query);
+        const query = `SELECT * FROM products WHERE categoryID = ? AND status = 'active' ORDER BY createdAt DESC LIMIT ? OFFSET ?`;
+        const [rows] = await db.execute(query, [categoryID, limitNum, offset]);
 
         // Get total count for pagination
-        const countQuery = `SELECT COUNT(*) as total FROM products WHERE categoryID = '${categoryID}' AND status = 'active'`;
-        const [countResult] = await db.execute(countQuery);
+        const countQuery = `SELECT COUNT(*) as total FROM products WHERE categoryID = ? AND status = 'active'`;
+        const [countResult] = await db.execute(countQuery, [categoryID]);
         const total = countResult[0].total;
 
         return {
@@ -234,7 +258,8 @@ async function createCategory(categoryData) {
         const { categoryName, image } = categoryData;
 
         const [result] = await db.execute(
-            `INSERT INTO categories (categoryID, categoryName, image) VALUES ('${categoryID}', '${categoryName}', '${image}')`
+            'INSERT INTO categories (categoryID, categoryName, image) VALUES (?, ?, ?)',
+            [categoryID, categoryName, image]
         );
 
         return {
@@ -247,6 +272,36 @@ async function createCategory(categoryData) {
     }
 }
 
+// Update inventory by SKU
+async function updateInventoryBySku(sku, inventory) {
+    try {
+        const [result] = await db.execute(
+            'UPDATE products SET inventory = ?, updatedAt = CURRENT_TIMESTAMP WHERE sku = ?',
+            [inventory, sku]
+        );
+
+        return {
+            affectedRows: result.affectedRows,
+            changedRows: result.changedRows
+        };
+    } catch (error) {
+        throw new Error(`Error updating inventory by SKU: ${error.message}`);
+    }
+}
+
+// Check if SKU exists
+async function checkSkuExists(sku) {
+    try {
+        const [rows] = await db.execute(
+            'SELECT productID, productName, sku, inventory FROM products WHERE sku = ?',
+            [sku]
+        );
+        return rows[0] || null;
+    } catch (error) {
+        throw new Error(`Error checking SKU: ${error.message}`);
+    }
+}
+
 module.exports = {
     createProduct,
     getAllProducts,
@@ -255,5 +310,7 @@ module.exports = {
     deleteProduct,
     getCategories,
     createCategory,
-    getProductsByCategory
+    getProductsByCategory,
+    updateInventoryBySku,
+    checkSkuExists
 };

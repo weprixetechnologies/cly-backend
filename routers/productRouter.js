@@ -9,6 +9,7 @@ const router = express.Router();
 
 // Product routes
 router.post('/add', productController.addProduct);
+router.post('/update-inventory', productController.updateInventoryBySku);
 router.get('/list', productController.getAllProducts);
 router.get('/by-category/:categoryID', productController.getProductsByCategory);
 router.get('/:productID', productController.getProductById);

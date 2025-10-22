@@ -10,8 +10,8 @@ async function getCartByUser(uid) {
     try {
         const cartID = getCartIdForUser(uid);
         const [rows] = await db.execute(
-            `SELECT cartID, productID, productName, boxQty, packQty, units, featuredImage, uid, createdAt, updatedAt
-             FROM cart_items WHERE cartID = '${cartID}' AND uid = '${uid}' ORDER BY createdAt DESC`
+            'SELECT cartID, productID, productName, boxQty, units, featuredImage, uid, createdAt, updatedAt\n             FROM cart_items WHERE cartID = ? AND uid = ? ORDER BY createdAt DESC',
+            [cartID, uid]
         );
         return { cartID, items: rows };
     } catch (error) {
@@ -28,21 +28,13 @@ async function upsertCartItem(uid, item) {
             productName,
             featuredImage,
             boxQty = 0,
-            packQty = 0,
             units = 0
         } = item;
 
         // Insert or update
         const [result] = await db.execute(
-            `INSERT INTO cart_items (cartID, productID, productName, boxQty, packQty, units, featuredImage, uid)
-             VALUES ('${cartID}', '${productID}', '${productName}', ${boxQty}, ${packQty}, ${units}, '${featuredImage}', '${uid}')
-             ON DUPLICATE KEY UPDATE 
-               productName = VALUES(productName),
-               featuredImage = VALUES(featuredImage),
-               boxQty = boxQty + VALUES(boxQty),
-               packQty = packQty + VALUES(packQty),
-               units = units + VALUES(units),
-               updatedAt = CURRENT_TIMESTAMP`
+            'INSERT INTO cart_items (cartID, productID, productName, boxQty, units, featuredImage, uid)\n             VALUES (?, ?, ?, ?, ?, ?, ?)\n             ON DUPLICATE KEY UPDATE \n               productName = VALUES(productName),\n               featuredImage = VALUES(featuredImage),\n               boxQty = boxQty + VALUES(boxQty),\n               units = units + VALUES(units),\n               updatedAt = CURRENT_TIMESTAMP',
+            [cartID, productID, productName, boxQty, units, featuredImage, uid]
         );
 
         return { affectedRows: result.affectedRows, cartID };
@@ -55,15 +47,11 @@ async function upsertCartItem(uid, item) {
 async function updateCartItem(uid, productID, quantities) {
     try {
         const cartID = getCartIdForUser(uid);
-        const { boxQty, packQty, units } = quantities;
+        const { boxQty, units } = quantities;
 
         const [result] = await db.execute(
-            `UPDATE cart_items SET 
-               boxQty = ${boxQty ?? 0},
-               packQty = ${packQty ?? 0},
-               units = ${units ?? 0},
-               updatedAt = CURRENT_TIMESTAMP
-             WHERE cartID = '${cartID}' AND productID = '${productID}' AND uid = '${uid}'`
+            'UPDATE cart_items SET \n               boxQty = ?,\n               units = ?,\n               updatedAt = CURRENT_TIMESTAMP\n             WHERE cartID = ? AND productID = ? AND uid = ?',
+            [boxQty ?? 0, units ?? 0, cartID, productID, uid]
         );
 
         return result.affectedRows > 0;
@@ -77,7 +65,8 @@ async function removeCartItem(uid, productID) {
     try {
         const cartID = getCartIdForUser(uid);
         const [result] = await db.execute(
-            `DELETE FROM cart_items WHERE cartID = '${cartID}' AND productID = '${productID}' AND uid = '${uid}'`
+            'DELETE FROM cart_items WHERE cartID = ? AND productID = ? AND uid = ?',
+            [cartID, productID, uid]
         );
         return result.affectedRows > 0;
     } catch (error) {
@@ -90,7 +79,8 @@ async function clearCart(uid) {
     try {
         const cartID = getCartIdForUser(uid);
         const [result] = await db.execute(
-            `DELETE FROM cart_items WHERE cartID = '${cartID}' AND uid = '${uid}'`
+            'DELETE FROM cart_items WHERE cartID = ? AND uid = ?',
+            [cartID, uid]
         );
         return result.affectedRows;
     } catch (error) {
@@ -105,25 +95,21 @@ async function cleanupDuplicateItems(uid) {
 
         // Get all cart items grouped by productID
         const [rows] = await db.execute(
-            `SELECT productID, productName, featuredImage, 
-                    SUM(boxQty) as totalBoxQty, 
-                    SUM(packQty) as totalPackQty, 
-                    SUM(units) as totalUnits
-             FROM cart_items 
-             WHERE cartID = '${cartID}' AND uid = '${uid}' 
-             GROUP BY productID, productName, featuredImage`
+            'SELECT productID, productName, featuredImage, \n                    SUM(boxQty) as totalBoxQty, \n                    SUM(units) as totalUnits\n             FROM cart_items \n             WHERE cartID = ? AND uid = ? \n             GROUP BY productID, productName, featuredImage',
+            [cartID, uid]
         );
 
         // Delete all existing items for this cart
         await db.execute(
-            `DELETE FROM cart_items WHERE cartID = '${cartID}' AND uid = '${uid}'`
+            'DELETE FROM cart_items WHERE cartID = ? AND uid = ?',
+            [cartID, uid]
         );
 
         // Insert consolidated items
         for (const item of rows) {
             await db.execute(
-                `INSERT INTO cart_items (cartID, productID, productName, boxQty, packQty, units, featuredImage, uid)
-                 VALUES ('${cartID}', '${item.productID}', '${item.productName}', ${item.totalBoxQty}, ${item.totalPackQty}, ${item.totalUnits}, '${item.featuredImage}', '${uid}')`
+                'INSERT INTO cart_items (cartID, productID, productName, boxQty, units, featuredImage, uid)\n                 VALUES (?, ?, ?, ?, ?, ?, ?)',
+                [cartID, item.productID, item.productName, item.totalBoxQty, item.totalUnits, item.featuredImage, uid]
             );
         }
 

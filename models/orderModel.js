@@ -18,9 +18,8 @@ async function createOrderFromCart(orderData) {
         const productIdToTotals = new Map();
         for (const item of items || []) {
             const key = String(item.productID);
-            const prev = productIdToTotals.get(key) || { productID: item.productID, productName: item.productName, featuredImage: item.featuredImage || '', boxQty: 0, packQty: 0, units: 0 };
+            const prev = productIdToTotals.get(key) || { productID: item.productID, productName: item.productName, featuredImage: item.featuredImage || '', boxQty: 0, units: 0 };
             prev.boxQty += Number(item.boxQty || 0);
-            prev.packQty += Number(item.packQty || 0);
             prev.units += Number(item.units || 0);
             // prefer first non-empty name/image
             if (!prev.productName && item.productName) prev.productName = item.productName;
@@ -30,7 +29,7 @@ async function createOrderFromCart(orderData) {
 
         // Insert one row per unique productID with address and payment details
         for (const consolidated of productIdToTotals.values()) {
-            const { productID, productName, boxQty = 0, packQty = 0, units = 0, featuredImage } = consolidated;
+            const { productID, productName, boxQty = 0, units = 0, featuredImage } = consolidated;
 
             // Prepare address fields
             const deliveryName = address?.name || '';
@@ -44,8 +43,8 @@ async function createOrderFromCart(orderData) {
             ].filter(Boolean).join(', ');
 
             await connection.execute(
-                `INSERT INTO orders (orderID, productID, productName, boxQty, packQty, units, featuredImage, uid, orderStatus, addressName, addressPhone, addressLine1, addressLine2, addressCity, addressState, addressPincode, paymentMode, couponCode)
-                 VALUES ('${orderID}', '${productID}', '${productName}', ${boxQty}, ${packQty}, ${units}, '${featuredImage || ''}', '${uid}', 'pending', '${deliveryName}', '${deliveryPhone}', '${address?.addressLine1 || ''}', '${address?.addressLine2 || ''}', '${address?.city || ''}', '${address?.state || ''}', '${address?.pincode || ''}', '${paymentMode || 'COD'}', '${couponCode || ''}')`
+                'INSERT INTO orders (orderID, productID, productName, boxQty, units, featuredImage, uid, orderStatus, addressName, addressPhone, addressLine1, addressLine2, addressCity, addressState, addressPincode, paymentMode, couponCode)\n                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                [orderID, productID, productName, boxQty, units, featuredImage || '', uid, 'pending', deliveryName, deliveryPhone, address?.addressLine1 || '', address?.addressLine2 || '', address?.city || '', address?.state || '', address?.pincode || '', paymentMode || 'COD', couponCode || '']
             );
         }
 
@@ -63,7 +62,8 @@ async function createOrderFromCart(orderData) {
 async function getOrdersByUser(uid) {
     try {
         const [rows] = await db.execute(
-            `SELECT * FROM orders WHERE uid = '${uid}' ORDER BY orderID DESC`
+            'SELECT * FROM orders WHERE uid = ? ORDER BY orderID DESC',
+            [uid]
         );
         return rows;
     } catch (error) {
@@ -75,7 +75,8 @@ async function getOrdersByUser(uid) {
 async function getOrderById(orderID) {
     try {
         const [rows] = await db.execute(
-            `SELECT * FROM orders WHERE orderID = '${orderID}'`
+            'SELECT * FROM orders WHERE orderID = ?',
+            [orderID]
         );
         return rows;
     } catch (error) {
@@ -87,7 +88,8 @@ async function getOrderById(orderID) {
 async function updateOrderStatus(orderID, orderStatus) {
     try {
         const [result] = await db.execute(
-            `UPDATE orders SET orderStatus = '${orderStatus}' WHERE orderID = '${orderID}'`
+            'UPDATE orders SET orderStatus = ? WHERE orderID = ?',
+            [orderStatus, orderID]
         );
         return result.affectedRows > 0;
     } catch (error) {
@@ -118,25 +120,30 @@ async function getAllOrders(filters = {}) {
 
         // Status filter
         if (status && status !== 'all') {
-            whereConditions.push(`orderStatus = '${status}'`);
+            whereConditions.push('orderStatus = ?');
+            params.push(status);
         }
 
         // Payment mode filter
         if (paymentMode && paymentMode !== 'all') {
-            whereConditions.push(`paymentMode = '${paymentMode}'`);
+            whereConditions.push('paymentMode = ?');
+            params.push(paymentMode);
         }
 
         // Search filter (orderID, uid, productName)
         if (search) {
-            whereConditions.push(`(orderID LIKE '%${search}%' OR uid LIKE '%${search}%' OR productName LIKE '%${search}%')`);
+            whereConditions.push('(orderID LIKE ? OR uid LIKE ? OR productName LIKE ?)');
+            params.push(`%${search}%`, `%${search}%`, `%${search}%`);
         }
 
         // Date range filter
         if (dateFrom) {
-            whereConditions.push(`DATE(createdAt) >= '${dateFrom}'`);
+            whereConditions.push('DATE(createdAt) >= ?');
+            params.push(dateFrom);
         }
         if (dateTo) {
-            whereConditions.push(`DATE(createdAt) <= '${dateTo}'`);
+            whereConditions.push('DATE(createdAt) <= ?');
+            params.push(dateTo);
         }
 
         const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
@@ -147,10 +154,10 @@ async function getAllOrders(filters = {}) {
             FROM orders 
             ${whereClause}
         `;
-        const [countResult] = await db.execute(countQuery);
+        const [countResult] = await db.execute(countQuery, params);
         const total = countResult[0].total;
 
-        // Get orders with pagination - directly inject LIMIT and OFFSET values
+        // Get orders with pagination - add LIMIT and OFFSET to params
         const ordersQuery = `
             SELECT 
                 orderID,
@@ -166,10 +173,10 @@ async function getAllOrders(filters = {}) {
             ${whereClause}
             GROUP BY orderID
             ORDER BY orderID DESC
-            LIMIT ${limitNum} OFFSET ${offset}
+            LIMIT ? OFFSET ?
         `;
 
-        const [rows] = await db.execute(ordersQuery);
+        const [rows] = await db.execute(ordersQuery, [...params, limitNum, offset]);
 
         return {
             orders: rows,
@@ -185,59 +192,18 @@ async function getAllOrders(filters = {}) {
     }
 }
 
-// Admin: Deduct inventory for all items in an order when accepting
-async function deductInventoryForOrder(orderID) {
-    const connection = await db.getConnection();
-    try {
-        await connection.beginTransaction();
-
-        // Get all line items for this order
-        const [items] = await connection.execute(
-            `SELECT productID, boxQty, packQty, units FROM orders WHERE orderID = '${orderID}'`
-        );
-
-        // For each product, reduce inventory by units only (business rule)
-        for (const item of items) {
-            const totalRequested = (item.units || 0);
-            if (totalRequested <= 0) continue;
-
-            // Fetch current inventory
-            const [prodRows] = await connection.execute(
-                `SELECT inventory FROM products WHERE productID = '${item.productID}' FOR UPDATE`
-            );
-            if (!prodRows || prodRows.length === 0) continue; // Skip missing products silently
-
-            const currentInventory = Number(prodRows[0].inventory || 0);
-            const newInventory = Math.max(0, currentInventory - totalRequested);
-
-            await connection.execute(
-                `UPDATE products SET inventory = ${newInventory}, updatedAt = CURRENT_TIMESTAMP WHERE productID = '${item.productID}'`
-            );
-        }
-
-        await connection.commit();
-        return true;
-    } catch (error) {
-        await connection.rollback();
-        throw new Error(`Error deducting inventory: ${error.message}`);
-    } finally {
-        connection.release();
-    }
-}
 
 // Calculate total amount for an order by summing quantity * productPrice
 async function calculateOrderTotal(orderID) {
     try {
         const [rows] = await db.execute(
-            `SELECT o.productID, o.boxQty, o.packQty, o.units, p.productPrice
-             FROM orders o
-             JOIN products p ON p.productID = o.productID
-             WHERE o.orderID = '${orderID}'`
+            'SELECT o.productID, o.boxQty, o.units, p.productPrice\n             FROM orders o\n             JOIN products p ON p.productID = o.productID\n             WHERE o.orderID = ?',
+            [orderID]
         );
 
         let total = 0;
         for (const r of rows) {
-            const qty = (r.units || 0) + (r.packQty || 0) + (r.boxQty || 0);
+            const qty = (r.units || 0) + (r.boxQty || 0);
             const price = Number(r.productPrice || 0);
             total += qty * price;
         }
@@ -253,7 +219,8 @@ async function addOutstanding(uid, amount) {
         const inc = Number(amount || 0);
         if (!Number.isFinite(inc)) return false;
         const [result] = await db.execute(
-            `UPDATE users SET outstanding = COALESCE(outstanding,0) + ${inc} WHERE uid = '${uid}'`
+            'UPDATE users SET outstanding = COALESCE(outstanding,0) + ? WHERE uid = ?',
+            [inc, uid]
         );
         return result.affectedRows > 0;
     } catch (error) {
@@ -267,7 +234,8 @@ async function subtractOutstanding(uid, amount) {
         const dec = Number(amount || 0);
         if (!Number.isFinite(dec)) return false;
         const [result] = await db.execute(
-            `UPDATE users SET outstanding = GREATEST(COALESCE(outstanding,0) - ${dec}, 0) WHERE uid = '${uid}'`
+            'UPDATE users SET outstanding = GREATEST(COALESCE(outstanding,0) - ?, 0) WHERE uid = ?',
+            [dec, uid]
         );
         return result.affectedRows > 0;
     } catch (error) {
@@ -275,16 +243,16 @@ async function subtractOutstanding(uid, amount) {
     }
 }
 
+
 module.exports = {
     createOrderFromCart,
     getOrdersByUser,
     getOrderById,
     updateOrderStatus,
     getAllOrders,
-    deductInventoryForOrder,
     calculateOrderTotal,
-    addOutstanding
-    , subtractOutstanding
+    addOutstanding,
+    subtractOutstanding
 };
 
 

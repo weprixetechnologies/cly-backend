@@ -14,15 +14,7 @@ const cartRouter = require('./routers/cartRouter.js');
 const orderRouter = require('./routers/orderRouter.js');
 
 // Middleware
-app.use(cors({
-    origin: [
-        'http://localhost:3000',                // for local dev
-        'http://localhost:3002',                // for local dev
-        'https://clyadmin.onrender.com',
-        'http://192.168.1.12:3002'    // your deployed Next.js frontend
-    ],
-    credentials: true
-}));
+app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 

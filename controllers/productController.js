@@ -9,7 +9,6 @@ const addProduct = async (req, res) => {
             sku,
             description,
             boxQty,
-            packQty,
             minQty,
             categoryID,
             categoryName,
@@ -19,7 +18,7 @@ const addProduct = async (req, res) => {
         } = req.body;
 
         // Validate required fields
-        if (!productName || !productPrice || !sku) {
+        if (!productName || !sku) {
             return res.status(400).json({
                 success: false,
                 message: 'Product name, price, and SKU are required'
@@ -35,7 +34,7 @@ const addProduct = async (req, res) => {
         }
 
         // Validate quantities
-        const quantities = { boxQty, packQty, minQty, inventory };
+        const quantities = { boxQty, minQty, inventory };
         for (const [key, value] of Object.entries(quantities)) {
             if (value !== undefined && (isNaN(value) || value < 0)) {
                 return res.status(400).json({
@@ -51,7 +50,6 @@ const addProduct = async (req, res) => {
             sku,
             description: description || '',
             boxQty: parseInt(boxQty) || 0,
-            packQty: parseInt(packQty) || 0,
             minQty: parseInt(minQty) || 1,
             categoryID: categoryID || null,
             categoryName: categoryName || null,
@@ -152,7 +150,6 @@ const updateProduct = async (req, res) => {
             sku,
             description,
             boxQty,
-            packQty,
             minQty,
             categoryID,
             categoryName,
@@ -193,7 +190,6 @@ const updateProduct = async (req, res) => {
             sku,
             description: description || '',
             boxQty: parseInt(boxQty) || 0,
-            packQty: parseInt(packQty) || 0,
             minQty: parseInt(minQty) || 1,
             categoryID: categoryID || null,
             categoryName: categoryName || null,
@@ -345,6 +341,72 @@ const createCategory = async (req, res) => {
     }
 };
 
+// Update inventory by SKU
+const updateInventoryBySku = async (req, res) => {
+    try {
+        const { productName, productPrice, sku, inventory } = req.body;
+
+        // Validate required fields
+        if (!sku || inventory === undefined) {
+            return res.status(400).json({
+                success: false,
+                message: 'SKU and inventory are required'
+            });
+        }
+
+        // Validate inventory is a number
+        if (isNaN(inventory) || inventory < 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Inventory must be a valid non-negative number'
+            });
+        }
+
+        // Check if SKU exists
+        const existingProduct = await productModel.checkSkuExists(sku);
+        if (!existingProduct) {
+            return res.status(404).json({
+                success: false,
+                message: `Product with SKU '${sku}' not found`,
+                data: {
+                    sku,
+                    found: false
+                }
+            });
+        }
+
+        // Update inventory
+        const result = await productModel.updateInventoryBySku(sku, parseInt(inventory));
+
+        if (result.affectedRows === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'No changes made to the inventory'
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            message: 'Inventory updated successfully',
+            data: {
+                sku,
+                productName: existingProduct.productName,
+                oldInventory: existingProduct.inventory,
+                newInventory: parseInt(inventory),
+                updated: true
+            }
+        });
+
+    } catch (error) {
+        console.error('Error updating inventory by SKU:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to update inventory',
+            error: error.message
+        });
+    }
+};
+
 module.exports = {
     addProduct,
     getAllProducts,
@@ -353,5 +415,6 @@ module.exports = {
     deleteProduct,
     getProductsByCategory,
     getCategories,
-    createCategory
+    createCategory,
+    updateInventoryBySku
 };
