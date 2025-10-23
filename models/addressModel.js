@@ -1,10 +1,10 @@
 const db = require('../utils/dbconnect');
-const { v4: uuidv4 } = require('uuid');
+const crypto = require('crypto');
 
 // Create address
 async function createAddress(addressData, connection = null) {
     try {
-        const addressID = uuidv4();
+        const addressID = crypto.randomUUID();
         const {
             userID,
             name,
