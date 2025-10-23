@@ -10,7 +10,23 @@ async function getCartByUser(uid) {
     try {
         const cartID = getCartIdForUser(uid);
         const [rows] = await db.execute(
-            'SELECT cartID, productID, productName, boxQty, units, featuredImage, uid, createdAt, updatedAt\n             FROM cart_items WHERE cartID = ? AND uid = ? ORDER BY createdAt DESC',
+            `SELECT 
+                ci.cartID, 
+                ci.productID, 
+                ci.productName, 
+                ci.units, 
+                ci.featuredImage, 
+                ci.uid, 
+                ci.createdAt, 
+                ci.updatedAt,
+                p.minQty,
+                p.productPrice,
+                p.inventory,
+                p.boxQty
+             FROM cart_items ci
+             LEFT JOIN products p ON ci.productID = p.productID
+             WHERE ci.cartID = ? AND ci.uid = ? 
+             ORDER BY ci.createdAt DESC`,
             [cartID, uid]
         );
         return { cartID, items: rows };
@@ -27,17 +43,35 @@ async function upsertCartItem(uid, item) {
             productID,
             productName,
             featuredImage,
-            boxQty = 0,
             units = 0
         } = item;
 
-        // Insert or update
-        const [result] = await db.execute(
-            'INSERT INTO cart_items (cartID, productID, productName, boxQty, units, featuredImage, uid)\n             VALUES (?, ?, ?, ?, ?, ?, ?)\n             ON DUPLICATE KEY UPDATE \n               productName = VALUES(productName),\n               featuredImage = VALUES(featuredImage),\n               boxQty = boxQty + VALUES(boxQty),\n               units = units + VALUES(units),\n               updatedAt = CURRENT_TIMESTAMP',
-            [cartID, productID, productName, boxQty, units, featuredImage, uid]
+        // First check if item already exists in cart
+        const [existingItems] = await db.execute(
+            'SELECT units FROM cart_items WHERE cartID = ? AND productID = ? AND uid = ?',
+            [cartID, productID, uid]
         );
 
-        return { affectedRows: result.affectedRows, cartID };
+        if (existingItems.length > 0) {
+            // Item exists, update the quantity by adding new units
+            const currentUnits = existingItems[0].units || 0;
+            const newTotalUnits = currentUnits + units;
+
+            const [result] = await db.execute(
+                'UPDATE cart_items SET units = ?, productName = ?, featuredImage = ?, updatedAt = CURRENT_TIMESTAMP WHERE cartID = ? AND productID = ? AND uid = ?',
+                [newTotalUnits, productName, featuredImage, cartID, productID, uid]
+            );
+
+            return { affectedRows: result.affectedRows, cartID, action: 'updated' };
+        } else {
+            // Item doesn't exist, insert new item
+            const [result] = await db.execute(
+                'INSERT INTO cart_items (cartID, productID, productName, boxQty, units, featuredImage, uid) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                [cartID, productID, productName, 0, units, featuredImage, uid]
+            );
+
+            return { affectedRows: result.affectedRows, cartID, action: 'inserted' };
+        }
     } catch (error) {
         throw new Error(`Error upserting cart item: ${error.message}`);
     }
@@ -47,11 +81,11 @@ async function upsertCartItem(uid, item) {
 async function updateCartItem(uid, productID, quantities) {
     try {
         const cartID = getCartIdForUser(uid);
-        const { boxQty, units } = quantities;
+        const { units } = quantities;
 
         const [result] = await db.execute(
-            'UPDATE cart_items SET \n               boxQty = ?,\n               units = ?,\n               updatedAt = CURRENT_TIMESTAMP\n             WHERE cartID = ? AND productID = ? AND uid = ?',
-            [boxQty ?? 0, units ?? 0, cartID, productID, uid]
+            'UPDATE cart_items SET \n               boxQty = 0,\n               units = ?,\n               updatedAt = CURRENT_TIMESTAMP\n             WHERE cartID = ? AND productID = ? AND uid = ?',
+            [units ?? 0, cartID, productID, uid]
         );
 
         return result.affectedRows > 0;
@@ -95,7 +129,7 @@ async function cleanupDuplicateItems(uid) {
 
         // Get all cart items grouped by productID
         const [rows] = await db.execute(
-            'SELECT productID, productName, featuredImage, \n                    SUM(boxQty) as totalBoxQty, \n                    SUM(units) as totalUnits\n             FROM cart_items \n             WHERE cartID = ? AND uid = ? \n             GROUP BY productID, productName, featuredImage',
+            'SELECT productID, productName, featuredImage, \n                    SUM(units) as totalUnits\n             FROM cart_items \n             WHERE cartID = ? AND uid = ? \n             GROUP BY productID, productName, featuredImage',
             [cartID, uid]
         );
 
@@ -109,7 +143,7 @@ async function cleanupDuplicateItems(uid) {
         for (const item of rows) {
             await db.execute(
                 'INSERT INTO cart_items (cartID, productID, productName, boxQty, units, featuredImage, uid)\n                 VALUES (?, ?, ?, ?, ?, ?, ?)',
-                [cartID, item.productID, item.productName, item.totalBoxQty, item.totalUnits, item.featuredImage, uid]
+                [cartID, item.productID, item.productName, 0, item.totalUnits, item.featuredImage, uid]
             );
         }
 

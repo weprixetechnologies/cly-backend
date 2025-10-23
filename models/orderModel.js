@@ -18,8 +18,7 @@ async function createOrderFromCart(orderData) {
         const productIdToTotals = new Map();
         for (const item of items || []) {
             const key = String(item.productID);
-            const prev = productIdToTotals.get(key) || { productID: item.productID, productName: item.productName, featuredImage: item.featuredImage || '', boxQty: 0, units: 0 };
-            prev.boxQty += Number(item.boxQty || 0);
+            const prev = productIdToTotals.get(key) || { productID: item.productID, productName: item.productName, featuredImage: item.featuredImage || '', units: 0 };
             prev.units += Number(item.units || 0);
             // prefer first non-empty name/image
             if (!prev.productName && item.productName) prev.productName = item.productName;
@@ -29,7 +28,12 @@ async function createOrderFromCart(orderData) {
 
         // Insert one row per unique productID with address and payment details
         for (const consolidated of productIdToTotals.values()) {
-            const { productID, productName, boxQty = 0, units = 0, featuredImage } = consolidated;
+            const { productID, productName, units = 0, featuredImage } = consolidated;
+
+            // Get product's boxQty to calculate required boxes
+            const product = await productModel.getProductById(productID);
+            const productBoxQty = product?.boxQty || 1; // Default to 1 if not found
+            const requiredBoxes = Math.ceil(units / productBoxQty);
 
             // Prepare address fields
             const deliveryName = address?.name || '';
@@ -43,8 +47,8 @@ async function createOrderFromCart(orderData) {
             ].filter(Boolean).join(', ');
 
             await connection.execute(
-                'INSERT INTO orders (orderID, productID, productName, boxQty, units, featuredImage, uid, orderStatus, addressName, addressPhone, addressLine1, addressLine2, addressCity, addressState, addressPincode, paymentMode, couponCode)\n                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                [orderID, productID, productName, boxQty, units, featuredImage || '', uid, 'pending', deliveryName, deliveryPhone, address?.addressLine1 || '', address?.addressLine2 || '', address?.city || '', address?.state || '', address?.pincode || '', paymentMode || 'COD', couponCode || '']
+                'INSERT INTO orders (orderID, productID, productName, boxes, units, featuredImage, uid, orderStatus, addressName, addressPhone, addressLine1, addressLine2, addressCity, addressState, addressPincode, paymentMode, couponCode)\n                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                [orderID, productID, productName, requiredBoxes, units, featuredImage || '', uid, 'pending', deliveryName, deliveryPhone, address?.addressLine1 || '', address?.addressLine2 || '', address?.city || '', address?.state || '', address?.pincode || '', paymentMode || 'COD', couponCode || '']
             );
         }
 
@@ -197,13 +201,13 @@ async function getAllOrders(filters = {}) {
 async function calculateOrderTotal(orderID) {
     try {
         const [rows] = await db.execute(
-            'SELECT o.productID, o.boxQty, o.units, p.productPrice\n             FROM orders o\n             JOIN products p ON p.productID = o.productID\n             WHERE o.orderID = ?',
+            'SELECT o.productID, o.boxes, o.units, p.productPrice\n             FROM orders o\n             JOIN products p ON p.productID = o.productID\n             WHERE o.orderID = ?',
             [orderID]
         );
 
         let total = 0;
         for (const r of rows) {
-            const qty = (r.units || 0) + (r.boxQty || 0);
+            const qty = r.units || 0; // Only use units for pricing calculation
             const price = Number(r.productPrice || 0);
             total += qty * price;
         }

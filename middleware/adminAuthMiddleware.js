@@ -1,6 +1,8 @@
 const jwt = require('jsonwebtoken')
 
 const verifyAdminAccessToken = (req, res, next) => {
+
+
     try {
         // 1️⃣ Get token from cookies (or Authorization header)
         const token =
@@ -24,6 +26,7 @@ const verifyAdminAccessToken = (req, res, next) => {
 
         // 4️⃣ Attach user to req
         req.user = decoded; // contains id, email, role, etc.
+        console.log(decoded);
 
         next();
     } catch (error) {

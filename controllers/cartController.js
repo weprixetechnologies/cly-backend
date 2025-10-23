@@ -43,19 +43,31 @@ const addToCart = async (req, res) => {
             return res.status(401).json({ success: false, message: 'Unauthorized: missing uid' });
         }
         const item = req.body;
-        if (!item || !item.productID || (!item.boxQty && !item.units)) {
-            return res.status(400).json({ success: false, message: 'Invalid cart item' });
+        if (!item || !item.productID || !item.units || item.units <= 0) {
+            return res.status(400).json({ success: false, message: 'Invalid cart item - units must be greater than 0' });
         }
 
-        // Calculate total quantity
-        const totalQuantity = (item.boxQty || 0) + (item.units || 0);
+        // Get current cart to check if item already exists
+        const currentCart = await cartModel.getCartByUser(uid);
+        const existingItem = currentCart.items.find(cartItem => cartItem.productID === item.productID);
 
-        // Validate quantity against minQty
+        let totalQuantity = item.units;
+        if (existingItem) {
+            // Item already exists, calculate total quantity
+            totalQuantity = (existingItem.units || 0) + item.units;
+        }
+
+        // Validate total quantity against minQty
         await validateQuantity(item.productID, totalQuantity);
 
-        await cartModel.upsertCartItem(uid, item);
+        const result = await cartModel.upsertCartItem(uid, item);
         const cart = await cartModel.getCartByUser(uid);
-        res.status(200).json({ success: true, message: 'Added to cart', data: cart });
+
+        const message = result.action === 'updated'
+            ? 'Quantity updated in cart'
+            : 'Added to cart';
+
+        res.status(200).json({ success: true, message, data: cart });
     } catch (error) {
         res.status(400).json({ success: false, message: error.message });
     }
@@ -69,15 +81,20 @@ const updateCartItem = async (req, res) => {
         if (!uid) {
             return res.status(401).json({ success: false, message: 'Unauthorized: missing uid' });
         }
-        const { boxQty = 0, units = 0 } = req.body;
+        const { units = 0 } = req.body;
 
-        // Calculate total quantity
-        const totalQuantity = (boxQty || 0) + (units || 0);
+        // If units is 0, remove the item from cart
+        if (units <= 0) {
+            const ok = await cartModel.removeCartItem(uid, productID);
+            if (!ok) return res.status(404).json({ success: false, message: 'Item not found' });
+            const cart = await cartModel.getCartByUser(uid);
+            return res.status(200).json({ success: true, message: 'Item removed from cart', data: cart });
+        }
 
         // Validate quantity against minQty
-        await validateQuantity(productID, totalQuantity);
+        await validateQuantity(productID, units);
 
-        const ok = await cartModel.updateCartItem(uid, productID, { boxQty, units });
+        const ok = await cartModel.updateCartItem(uid, productID, { units });
         if (!ok) return res.status(404).json({ success: false, message: 'Item not found' });
         const cart = await cartModel.getCartByUser(uid);
         res.status(200).json({ success: true, message: 'Cart updated', data: cart });

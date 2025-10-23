@@ -12,6 +12,10 @@ const categoryRouter = require('./routers/categoryRouter.js');
 const sliderRouter = require('./routers/sliderRouter.js');
 const cartRouter = require('./routers/cartRouter.js');
 const orderRouter = require('./routers/orderRouter.js');
+const policyRouter = require('./routers/policyRouter.js');
+const contactRouter = require('./routers/contactRouter.js');
+const addressRouter = require('./routers/addressRouter.js');
+const setupController = require('./controllers/setupController.js');
 
 // Middleware
 app.use(cors());
@@ -32,6 +36,13 @@ app.use('/api/categories', categoryRouter);
 app.use('/api/sliders', sliderRouter);
 app.use('/api/cart', cartRouter);
 app.use('/api/order', orderRouter);
+app.use('/api/policies', policyRouter);
+app.use('/api/contact', contactRouter);
+app.use('/api/addresses', addressRouter);
+
+// Setup routes (for creating tables)
+app.post('/api/setup/create-addresses-table', setupController.createAddressesTable);
+app.post('/api/setup/rename-boxQty-to-boxes', setupController.renameBoxQtyToBoxes);
 
 
 

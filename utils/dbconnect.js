@@ -12,8 +12,6 @@ const pool = mysql.createPool({
     user: 'adminuser',
     password: 'admin12',
     database: 'clydb'
-
-
 })
 
 
