@@ -76,10 +76,10 @@ async function updateCategory(categoryID, updateData, connection = null) {
         `;
 
         if (connection) {
-            const [result] = await connection.execute(query);
+            const [result] = await connection.execute(query, [categoryID]);
             return result.affectedRows > 0;
         } else {
-            const [result] = await db.execute(query);
+            const [result] = await db.execute(query, [categoryID]);
             return result.affectedRows > 0;
         }
     } catch (error) {
