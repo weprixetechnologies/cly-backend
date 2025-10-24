@@ -12,4 +12,7 @@ router.post('/add-order-amount-column', setupController.addOrderAmountColumn);
 // POST /api/setup/add-product-price-column
 router.post('/add-product-price-column', setupController.addProductPriceColumn);
 
+// POST /api/setup/add-partial-acceptance-columns
+router.post('/add-partial-acceptance-columns', setupController.addPartialAcceptanceColumns);
+
 module.exports = router;

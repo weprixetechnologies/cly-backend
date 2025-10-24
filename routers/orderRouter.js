@@ -115,5 +115,53 @@ router.get('/admin/:orderID', async (req, res) => {
     }
 });
 
+// Admin: update order with partial acceptance
+router.put('/admin/acceptance', async (req, res) => {
+    try {
+        const { orderID, productID, acceptedUnits, adminNotes } = req.body;
+
+        if (!orderID || !productID || acceptedUnits === undefined) {
+            return res.status(400).json({
+                success: false,
+                message: 'Order ID, Product ID, and accepted units are required'
+            });
+        }
+
+        if (acceptedUnits < 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Accepted units cannot be negative'
+            });
+        }
+
+        const orderModel = require('../models/orderModel');
+        const result = await orderModel.updateOrderAcceptance(
+            orderID,
+            productID,
+            parseInt(acceptedUnits),
+            adminNotes || ''
+        );
+
+        if (result) {
+            return res.status(200).json({
+                success: true,
+                message: 'Order acceptance updated successfully'
+            });
+        } else {
+            return res.status(404).json({
+                success: false,
+                message: 'Order item not found'
+            });
+        }
+    } catch (error) {
+        console.error('[orderRouter] /admin/acceptance error:', error.message);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to update order acceptance',
+            error: error.message
+        });
+    }
+});
+
 module.exports = router;
 

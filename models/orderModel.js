@@ -59,8 +59,8 @@ async function createOrderFromCart(orderData) {
             const deliveryPhone = address?.phone || '';
 
             await connection.execute(
-                'INSERT INTO orders (orderID, productID, productName, boxes, units, featuredImage, uid, orderStatus, addressName, addressPhone, addressLine1, addressLine2, addressCity, addressState, addressPincode, paymentMode, couponCode, order_amount, productPrice)\n                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                [orderID, productID, productName, requiredBoxes, units, featuredImage || '', uid, 'pending', deliveryName, deliveryPhone, address?.addressLine1 || '', address?.addressLine2 || '', address?.city || '', address?.state || '', address?.pincode || '', paymentMode || 'COD', couponCode || '', totalOrderAmount, productPrice]
+                'INSERT INTO orders (orderID, productID, productName, boxes, units, requested_units, accepted_units, acceptance_status, featuredImage, uid, orderStatus, addressName, addressPhone, addressLine1, addressLine2, addressCity, addressState, addressPincode, paymentMode, couponCode, order_amount, productPrice)\n                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                [orderID, productID, productName, requiredBoxes, units, units, 0, 'pending', featuredImage || '', uid, 'pending', deliveryName, deliveryPhone, address?.addressLine1 || '', address?.addressLine2 || '', address?.city || '', address?.state || '', address?.pincode || '', paymentMode || 'COD', couponCode || '', totalOrderAmount, productPrice]
             );
         }
 
@@ -78,7 +78,7 @@ async function createOrderFromCart(orderData) {
 async function getOrdersByUser(uid) {
     try {
         const [rows] = await db.execute(
-            'SELECT * FROM orders WHERE uid = ? ORDER BY orderID DESC',
+            'SELECT o.*, p.sku FROM orders o LEFT JOIN products p ON p.productID = o.productID WHERE o.uid = ? ORDER BY o.orderID DESC',
             [uid]
         );
         return rows;
@@ -91,7 +91,7 @@ async function getOrdersByUser(uid) {
 async function getOrderById(orderID) {
     try {
         const [rows] = await db.execute(
-            'SELECT o.*, u.name as userName FROM orders o LEFT JOIN users u ON u.uid = o.uid WHERE o.orderID = ?',
+            'SELECT o.*, u.name as userName, p.sku FROM orders o LEFT JOIN users u ON u.uid = o.uid LEFT JOIN products p ON p.productID = o.productID WHERE o.orderID = ? ORDER BY o.productID',
             [orderID]
         );
         return rows;
@@ -110,6 +110,73 @@ async function updateOrderStatus(orderID, orderStatus) {
         return result.affectedRows > 0;
     } catch (error) {
         throw new Error(`Error updating order status: ${error.message}`);
+    }
+}
+
+// Update order with partial acceptance
+async function updateOrderAcceptance(orderID, productID, acceptedUnits, adminNotes = '') {
+    const connection = await db.getConnection();
+    try {
+        await connection.beginTransaction();
+
+        // Get the requested units for this product
+        const [rows] = await connection.execute(
+            'SELECT requested_units FROM orders WHERE orderID = ? AND productID = ?',
+            [orderID, productID]
+        );
+
+        if (rows.length === 0) {
+            throw new Error('Order item not found');
+        }
+
+        const requestedUnits = rows[0].requested_units;
+        let acceptanceStatus = 'pending';
+
+        if (acceptedUnits === 0) {
+            acceptanceStatus = 'rejected';
+        } else if (acceptedUnits === requestedUnits) {
+            acceptanceStatus = 'full';
+        } else if (acceptedUnits < requestedUnits) {
+            acceptanceStatus = 'partial';
+        }
+
+        // Update the specific product in the order
+        const [result] = await connection.execute(
+            'UPDATE orders SET accepted_units = ?, acceptance_status = ?, admin_notes = ? WHERE orderID = ? AND productID = ?',
+            [acceptedUnits, acceptanceStatus, adminNotes, orderID, productID]
+        );
+
+        // Update the overall order status based on all products
+        const [allItems] = await connection.execute(
+            'SELECT acceptance_status FROM orders WHERE orderID = ?',
+            [orderID]
+        );
+
+        let overallStatus = 'pending';
+        const hasRejected = allItems.some(item => item.acceptance_status === 'rejected');
+        const hasPartial = allItems.some(item => item.acceptance_status === 'partial');
+        const allFull = allItems.every(item => item.acceptance_status === 'full');
+
+        if (hasRejected && !allItems.some(item => item.acceptance_status === 'pending')) {
+            overallStatus = 'rejected';
+        } else if (allFull) {
+            overallStatus = 'accepted';
+        } else if (hasPartial || allItems.some(item => item.acceptance_status === 'pending')) {
+            overallStatus = 'pending';
+        }
+
+        await connection.execute(
+            'UPDATE orders SET orderStatus = ? WHERE orderID = ?',
+            [overallStatus, orderID]
+        );
+
+        await connection.commit();
+        return result.affectedRows > 0;
+    } catch (error) {
+        await connection.rollback();
+        throw new Error(`Error updating order acceptance: ${error.message}`);
+    } finally {
+        connection.release();
     }
 }
 
@@ -187,6 +254,8 @@ async function getAllOrders(filters = {}) {
                 MIN(o.addressState) as addressState,
                 MIN(o.createdAt) as createdAt,
                 MIN(o.order_amount) as order_amount,
+                SUM(o.requested_units) as total_requested,
+                SUM(o.accepted_units) as total_accepted,
                 COUNT(*) as items
             FROM orders o
             LEFT JOIN users u ON u.uid = o.uid
@@ -269,6 +338,7 @@ module.exports = {
     getOrdersByUser,
     getOrderById,
     updateOrderStatus,
+    updateOrderAcceptance,
     getAllOrders,
     calculateOrderTotal,
     addOutstanding,
