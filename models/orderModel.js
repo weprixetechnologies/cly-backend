@@ -58,9 +58,13 @@ async function createOrderFromCart(orderData) {
             const deliveryName = address?.name || '';
             const deliveryPhone = address?.phone || '';
 
+            // Determine payment status based on payment mode
+            const paymentStatus = (paymentMode === 'PREPAID' || paymentMode === 'PHONEPE') ? 'paid' : 'not_paid';
+            const paymentDate = paymentStatus === 'paid' ? new Date() : null;
+
             await connection.execute(
-                'INSERT INTO orders (orderID, productID, productName, boxes, units, requested_units, accepted_units, acceptance_status, featuredImage, uid, orderStatus, addressName, addressPhone, addressLine1, addressLine2, addressCity, addressState, addressPincode, paymentMode, couponCode, order_amount, productPrice)\n                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                [orderID, productID, productName, requiredBoxes, units, units, 0, 'pending', featuredImage || '', uid, 'pending', deliveryName, deliveryPhone, address?.addressLine1 || '', address?.addressLine2 || '', address?.city || '', address?.state || '', address?.pincode || '', paymentMode || 'COD', couponCode || '', totalOrderAmount, productPrice]
+                'INSERT INTO orders (orderID, productID, productName, boxes, units, requested_units, accepted_units, acceptance_status, featuredImage, uid, orderStatus, addressName, addressPhone, addressLine1, addressLine2, addressCity, addressState, addressPincode, paymentMode, couponCode, order_amount, productPrice, payment_status, payment_date)\n                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                [orderID, productID, productName, requiredBoxes, units, units, 0, 'pending', featuredImage || '', uid, 'pending', deliveryName, deliveryPhone, address?.addressLine1 || '', address?.addressLine2 || '', address?.city || '', address?.state || '', address?.pincode || '', paymentMode || 'COD', couponCode || '', totalOrderAmount, productPrice, paymentStatus, paymentDate]
             );
         }
 
@@ -91,7 +95,7 @@ async function getOrdersByUser(uid) {
 async function getOrderById(orderID) {
     try {
         const [rows] = await db.execute(
-            'SELECT o.*, u.name as userName, p.sku FROM orders o LEFT JOIN users u ON u.uid = o.uid LEFT JOIN products p ON p.productID = o.productID WHERE o.orderID = ? ORDER BY o.productID',
+            'SELECT o.*, u.name as userName, p.sku, p.inventory FROM orders o LEFT JOIN users u ON u.uid = o.uid LEFT JOIN products p ON p.productID = o.productID WHERE o.orderID = ? ORDER BY o.productID',
             [orderID]
         );
         return rows;
@@ -333,6 +337,131 @@ async function subtractOutstanding(uid, amount) {
 }
 
 
+// Get orders by user ID (for admin edit user page)
+async function getOrdersByUserId(uid) {
+    try {
+        const [rows] = await db.execute(
+            `SELECT 
+                orderID,
+                MIN(createdAt) as createdAt,
+                MIN(orderStatus) as orderStatus,
+                MIN(paymentMode) as paymentMode,
+                MIN(payment_status) as payment_status,
+                MIN(payment_date) as payment_date,
+                MIN(order_amount) as order_amount,
+                SUM(requested_units) as total_requested,
+                SUM(accepted_units) as total_accepted,
+                COUNT(*) as items
+            FROM orders 
+            WHERE uid = ? 
+            GROUP BY orderID 
+            ORDER BY createdAt DESC`,
+            [uid]
+        );
+        return rows;
+    } catch (error) {
+        throw new Error(`Error fetching user orders: ${error.message}`);
+    }
+}
+
+// Get order payment details
+async function getOrderPayment(orderID) {
+    try {
+        const [rows] = await db.execute(
+            'SELECT * FROM order_payments WHERE orderID = ? ORDER BY createdAt DESC',
+            [orderID]
+        );
+        return rows;
+    } catch (error) {
+        throw new Error(`Error fetching order payment: ${error.message}`);
+    }
+}
+
+// Update paid amount for entire order
+async function updateOrderPayment(orderID, paidAmount, adminUid, notes = '') {
+    const connection = await db.getConnection();
+    try {
+        await connection.beginTransaction();
+
+        // Get order details to calculate total amount
+        const [orderRows] = await db.execute(
+            'SELECT * FROM orders WHERE orderID = ?',
+            [orderID]
+        );
+
+        if (orderRows.length === 0) {
+            throw new Error('Order not found');
+        }
+
+        // Get total order amount (order_amount is the same for all items in an order)
+        const totalOrderAmount = parseFloat(orderRows[0]?.order_amount || 0);
+        const newPaidAmount = parseFloat(paidAmount);
+
+        // Validate paid amount
+        if (newPaidAmount < 0) {
+            throw new Error('Paid amount cannot be negative');
+        }
+        if (newPaidAmount > totalOrderAmount) {
+            throw new Error('Paid amount cannot exceed total order amount');
+        }
+
+        // Get current total paid amount
+        const [paymentRows] = await connection.execute(
+            'SELECT SUM(paid_amount) as total_paid FROM order_payments WHERE orderID = ?',
+            [orderID]
+        );
+        const currentTotalPaid = parseFloat(paymentRows[0]?.total_paid || 0);
+        const paidDifference = newPaidAmount - currentTotalPaid;
+
+        // Insert or update payment record
+        await connection.execute(
+            'INSERT INTO order_payments (orderID, paid_amount, admin_uid, notes) VALUES (?, ?, ?, ?)',
+            [orderID, newPaidAmount, adminUid, notes]
+        );
+
+        // Update payment status in orders table
+        // Calculate total accumulated payments (including the new payment)
+        const totalAccumulatedPayments = newPaidAmount; // newPaidAmount is the total amount to be paid
+
+        let paymentStatus = 'not_paid';
+        if (totalAccumulatedPayments >= totalOrderAmount) {
+            paymentStatus = 'paid';
+        } else if (totalAccumulatedPayments > 0) {
+            paymentStatus = 'partially_paid';
+        }
+
+        await connection.execute(
+            'UPDATE orders SET payment_status = ? WHERE orderID = ?',
+            [paymentStatus, orderID]
+        );
+
+        // Update user outstanding if there's a difference
+        if (paidDifference !== 0) {
+            const uid = orderRows[0].uid;
+            if (paidDifference > 0) {
+                // Reduce outstanding (payment received)
+                await subtractOutstanding(uid, paidDifference, connection);
+            } else {
+                // Increase outstanding (payment reversed)
+                await addOutstanding(uid, Math.abs(paidDifference), connection);
+            }
+        }
+
+        await connection.commit();
+        return {
+            success: true,
+            paidAmount: newPaidAmount,
+            totalOrderAmount: totalOrderAmount,
+            outstandingChange: paidDifference
+        };
+    } catch (error) {
+        await connection.rollback();
+        throw new Error(`Error updating order payment: ${error.message}`);
+    } finally {
+        connection.release();
+    }
+}
+
 module.exports = {
     createOrderFromCart,
     getOrdersByUser,
@@ -342,7 +471,10 @@ module.exports = {
     getAllOrders,
     calculateOrderTotal,
     addOutstanding,
-    subtractOutstanding
+    subtractOutstanding,
+    getOrdersByUserId,
+    getOrderPayment,
+    updateOrderPayment
 };
 
 

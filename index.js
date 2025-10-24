@@ -16,6 +16,7 @@ const policyRouter = require('./routers/policyRouter.js');
 const contactRouter = require('./routers/contactRouter.js');
 const addressRouter = require('./routers/addressRouter.js');
 const setupRouter = require('./routers/setupRouter.js');
+const userManagementRouter = require('./routers/userManagementRouter.js');
 
 // Middleware
 app.use(cors());
@@ -40,6 +41,7 @@ app.use('/api/policies', policyRouter);
 app.use('/api/contact', contactRouter);
 app.use('/api/addresses', addressRouter);
 app.use('/api/setup', setupRouter);
+app.use('/api/admin/users', userManagementRouter);
 
 // Setup routes (for creating tables)
 // Additional setup routes can be added here as needed

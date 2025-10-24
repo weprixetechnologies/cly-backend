@@ -54,14 +54,14 @@ async function generateUniqueUsername(emailID) {
 // Create new user
 async function createUser(userData, connection = null) {
     try {
-        const { uid, username, name, emailID, phoneNumber, gstin, password, role } = userData;
+        const { uid, username, name, emailID, phoneNumber, gstin, password, role, approval_status, approved_by, approved_at } = userData;
 
         // Hash password
         const saltRounds = 12;
         const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-        const query = `INSERT INTO users (uid, username, name, emailID, phoneNumber, gstin, password, role, createdAt, updatedAt) 
-                       VALUES ('${uid}', '${username}', '${name}', '${emailID}', '${phoneNumber}', '${gstin}', '${hashedPassword}', '${role}', NOW(), NOW())`;
+        const query = `INSERT INTO users (uid, username, name, emailID, phoneNumber, gstin, password, role, approval_status, approved_by, approved_at, createdAt, updatedAt) 
+                       VALUES ('${uid}', '${username}', '${name}', '${emailID}', '${phoneNumber}', '${gstin}', '${hashedPassword}', '${role}', '${approval_status}', ${approved_by ? `'${approved_by}'` : 'NULL'}, ${approved_at ? `'${approved_at.toISOString().slice(0, 19).replace('T', ' ')}'` : 'NULL'}, NOW(), NOW())`;
 
         let result;
         if (connection) {
@@ -78,6 +78,9 @@ async function createUser(userData, connection = null) {
             phoneNumber,
             gstin,
             role,
+            approval_status,
+            approved_by,
+            approved_at,
             createdAt: new Date()
         };
     } catch (error) {
@@ -255,6 +258,107 @@ async function rollbackTransaction(connection) {
     }
 }
 
+// Get users by approval status
+async function getUsersByApprovalStatus(status) {
+    try {
+        const [rows] = await db.execute(
+            'SELECT uid, username, name, emailID, phoneNumber, gstin, role, approval_status, approved_by, approved_at, outstanding, status, photo, createdAt FROM users WHERE approval_status = ? ORDER BY createdAt DESC',
+            [status]
+        );
+        return rows;
+    } catch (error) {
+        throw new Error(`Error fetching users by approval status: ${error.message}`);
+    }
+}
+
+// Get all users
+async function getAllUsers() {
+    try {
+        const [rows] = await db.execute(
+            'SELECT uid, username, name, emailID, phoneNumber, gstin, role, approval_status, approved_by, approved_at, outstanding, status, photo, createdAt FROM users ORDER BY createdAt DESC'
+        );
+        return rows;
+    } catch (error) {
+        throw new Error(`Error fetching all users: ${error.message}`);
+    }
+}
+
+// Update user approval status
+async function updateUserApproval(uid, status, approvedBy) {
+    try {
+        const [result] = await db.execute(
+            'UPDATE users SET approval_status = ?, approved_by = ?, approved_at = NOW() WHERE uid = ?',
+            [status, approvedBy, uid]
+        );
+        return result.affectedRows > 0;
+    } catch (error) {
+        throw new Error(`Error updating user approval: ${error.message}`);
+    }
+}
+
+// Get user by UID (updated version)
+async function getUserByUid(uid) {
+    try {
+        const [rows] = await db.execute(
+            'SELECT uid, username, name, emailID, phoneNumber, gstin, role, approval_status, approved_by, approved_at, outstanding, status, photo, createdAt FROM users WHERE uid = ?',
+            [uid]
+        );
+        return rows.length > 0 ? rows[0] : null;
+    } catch (error) {
+        throw new Error(`Error fetching user by UID: ${error.message}`);
+    }
+}
+
+// Update user details
+async function updateUser(uid, updateData) {
+    try {
+        const { name, emailID, phoneNumber, gstin, approval_status, approved_by, approved_at, photo, outstanding, status, role } = updateData;
+
+        let query = 'UPDATE users SET name = ?, emailID = ?, phoneNumber = ?, gstin = ?, approval_status = ?';
+        let params = [name, emailID, phoneNumber, gstin, approval_status];
+
+        // Add optional fields if provided
+        if (photo !== undefined) {
+            query += ', photo = ?';
+            params.push(photo);
+        }
+
+        if (outstanding !== undefined) {
+            query += ', outstanding = ?';
+            params.push(outstanding);
+        }
+
+        if (status !== undefined) {
+            query += ', status = ?';
+            params.push(status);
+        }
+
+        if (role !== undefined) {
+            query += ', role = ?';
+            params.push(role);
+        }
+
+        // Add approval fields if provided
+        if (approved_by !== undefined) {
+            query += ', approved_by = ?';
+            params.push(approved_by);
+        }
+
+        if (approved_at !== undefined) {
+            query += ', approved_at = ?';
+            params.push(approved_at);
+        }
+
+        query += ', updatedAt = NOW() WHERE uid = ?';
+        params.push(uid);
+
+        const [result] = await db.execute(query, params);
+        return result.affectedRows > 0;
+    } catch (error) {
+        throw new Error(`Error updating user: ${error.message}`);
+    }
+}
+
 module.exports = {
     checkUsernameExists,
     checkEmailExists,
@@ -272,5 +376,10 @@ module.exports = {
     clearUserSessions,
     beginTransaction,
     commitTransaction,
-    rollbackTransaction
+    rollbackTransaction,
+    getUsersByApprovalStatus,
+    getAllUsers,
+    updateUserApproval,
+    getUserByUid,
+    updateUser
 };

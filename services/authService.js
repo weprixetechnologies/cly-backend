@@ -117,7 +117,10 @@ async function registerUser(userData, role) {
             phoneNumber,
             gstin: userData.gstin || null,
             password,
-            role
+            role,
+            approval_status: role === 'admin' ? 'approved' : 'pending', // Admin users are auto-approved
+            approved_by: role === 'admin' ? 'system' : null,
+            approved_at: role === 'admin' ? new Date() : null
         };
 
         // BEGIN TRANSACTION
@@ -301,6 +304,15 @@ async function loginUser(loginData, role) {
         // Check if user has the correct role
         if (user.role !== role) {
             throw new Error(`Access denied. This account is not authorized for ${role} login`);
+        }
+
+        // Check if user is approved (only for regular users, admins are auto-approved)
+        if (user.role === 'user' && user.approval_status !== 'approved') {
+            if (user.approval_status === 'pending') {
+                throw new Error('Your account is pending approval. Please wait for admin approval.');
+            } else if (user.approval_status === 'rejected') {
+                throw new Error('Your account has been rejected. Please contact support.');
+            }
         }
 
         // Verify password

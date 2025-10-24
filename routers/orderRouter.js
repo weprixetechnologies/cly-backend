@@ -163,5 +163,11 @@ router.put('/admin/acceptance', async (req, res) => {
     }
 });
 
+// Update paid amount for entire order
+router.put('/admin/:orderID/payment', orderController.updateOrderPayment);
+
+// Get order payment details
+router.get('/admin/:orderID/payment', orderController.getOrderPayment);
+
 module.exports = router;
 

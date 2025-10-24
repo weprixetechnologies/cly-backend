@@ -7,7 +7,12 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "nodemon index.js",
     "dev": "nodemon index.js",
-    "migrate:order-status": "node migrations/alter_order_status_enum.js"
+    "migrate:order-status": "node migrations/alter_order_status_enum.js",
+    "migrate:user-approval": "node migrations/add_user_approval_field.js",
+    "migrate:payment-status": "node migrations/add_payment_status_to_orders.js",
+    "migrate:paid-amount": "node migrations/add_paid_amount_to_orders.js",
+    "migrate:order-payment": "node migrations/update_payment_tracking_to_order_level.js",
+    "migrate:partially-paid": "node migrations/add_partially_paid_to_payment_status.js"
   },
   "author": "",
   "license": "ISC",

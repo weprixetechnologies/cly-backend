@@ -180,12 +180,80 @@ const updateOrderAcceptance = async (req, res) => {
     }
 };
 
+// Update paid amount for entire order
+const updateOrderPayment = async (req, res) => {
+    try {
+        const { orderID } = req.params;
+        const { paidAmount, notes } = req.body;
+        const adminUid = req.user.uid;
+
+        if (!orderID) {
+            return res.status(400).json({
+                success: false,
+                message: 'Order ID is required'
+            });
+        }
+
+        if (!paidAmount || isNaN(parseFloat(paidAmount))) {
+            return res.status(400).json({
+                success: false,
+                message: 'Valid paid amount is required'
+            });
+        }
+
+        const result = await orderModel.updateOrderPayment(orderID, paidAmount, adminUid, notes || '');
+
+        res.status(200).json({
+            success: true,
+            message: 'Order payment updated successfully',
+            data: result
+        });
+    } catch (error) {
+        console.error('Update order payment error:', error.message);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to update order payment',
+            error: error.message
+        });
+    }
+};
+
+// Get order payment details
+const getOrderPayment = async (req, res) => {
+    try {
+        const { orderID } = req.params;
+
+        if (!orderID) {
+            return res.status(400).json({
+                success: false,
+                message: 'Order ID is required'
+            });
+        }
+
+        const payments = await orderModel.getOrderPayment(orderID);
+
+        res.status(200).json({
+            success: true,
+            data: payments
+        });
+    } catch (error) {
+        console.error('Get order payment error:', error.message);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch order payment',
+            error: error.message
+        });
+    }
+};
+
 module.exports = {
     placeOrder,
     getOrders,
     getOrderById,
     updateOrderStatus,
-    updateOrderAcceptance
+    updateOrderAcceptance,
+    updateOrderPayment,
+    getOrderPayment
 };
 
 
