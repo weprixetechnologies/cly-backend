@@ -26,29 +26,41 @@ async function createOrderFromCart(orderData) {
             productIdToTotals.set(key, prev);
         }
 
-        // Insert one row per unique productID with address and payment details
+        // Calculate total order amount and prepare product data
+        let totalOrderAmount = 0;
+        const productData = [];
+
         for (const consolidated of productIdToTotals.values()) {
             const { productID, productName, units = 0, featuredImage } = consolidated;
-
-            // Get product's boxQty to calculate required boxes
             const product = await productModel.getProductById(productID);
-            const productBoxQty = product?.boxQty || 1; // Default to 1 if not found
+            const productPrice = product?.productPrice || 0;
+            const productBoxQty = product?.boxQty || 1;
             const requiredBoxes = Math.ceil(units / productBoxQty);
+            const itemTotal = units * productPrice;
+
+            totalOrderAmount += itemTotal;
+
+            productData.push({
+                productID,
+                productName,
+                units,
+                featuredImage,
+                productPrice,
+                requiredBoxes
+            });
+        }
+
+        // Insert one row per unique productID with individual product pricing
+        for (const product of productData) {
+            const { productID, productName, units, featuredImage, productPrice, requiredBoxes } = product;
 
             // Prepare address fields
             const deliveryName = address?.name || '';
             const deliveryPhone = address?.phone || '';
-            const deliveryAddress = [
-                address?.addressLine1 || '',
-                address?.addressLine2 || '',
-                address?.city || '',
-                address?.state || '',
-                address?.pincode || ''
-            ].filter(Boolean).join(', ');
 
             await connection.execute(
-                'INSERT INTO orders (orderID, productID, productName, boxes, units, featuredImage, uid, orderStatus, addressName, addressPhone, addressLine1, addressLine2, addressCity, addressState, addressPincode, paymentMode, couponCode)\n                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                [orderID, productID, productName, requiredBoxes, units, featuredImage || '', uid, 'pending', deliveryName, deliveryPhone, address?.addressLine1 || '', address?.addressLine2 || '', address?.city || '', address?.state || '', address?.pincode || '', paymentMode || 'COD', couponCode || '']
+                'INSERT INTO orders (orderID, productID, productName, boxes, units, featuredImage, uid, orderStatus, addressName, addressPhone, addressLine1, addressLine2, addressCity, addressState, addressPincode, paymentMode, couponCode, order_amount, productPrice)\n                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                [orderID, productID, productName, requiredBoxes, units, featuredImage || '', uid, 'pending', deliveryName, deliveryPhone, address?.addressLine1 || '', address?.addressLine2 || '', address?.city || '', address?.state || '', address?.pincode || '', paymentMode || 'COD', couponCode || '', totalOrderAmount, productPrice]
             );
         }
 
@@ -79,7 +91,7 @@ async function getOrdersByUser(uid) {
 async function getOrderById(orderID) {
     try {
         const [rows] = await db.execute(
-            'SELECT * FROM orders WHERE orderID = ?',
+            'SELECT o.*, u.name as userName FROM orders o LEFT JOIN users u ON u.uid = o.uid WHERE o.orderID = ?',
             [orderID]
         );
         return rows;
@@ -124,29 +136,29 @@ async function getAllOrders(filters = {}) {
 
         // Status filter
         if (status && status !== 'all') {
-            whereConditions.push('orderStatus = ?');
+            whereConditions.push('o.orderStatus = ?');
             params.push(status);
         }
 
         // Payment mode filter
         if (paymentMode && paymentMode !== 'all') {
-            whereConditions.push('paymentMode = ?');
+            whereConditions.push('o.paymentMode = ?');
             params.push(paymentMode);
         }
 
-        // Search filter (orderID, uid, productName)
+        // Search filter (orderID, uid, userName, productName)
         if (search) {
-            whereConditions.push('(orderID LIKE ? OR uid LIKE ? OR productName LIKE ?)');
-            params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+            whereConditions.push('(o.orderID LIKE ? OR o.uid LIKE ? OR u.name LIKE ? OR o.productName LIKE ?)');
+            params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
         }
 
         // Date range filter
         if (dateFrom) {
-            whereConditions.push('DATE(createdAt) >= ?');
+            whereConditions.push('DATE(o.createdAt) >= ?');
             params.push(dateFrom);
         }
         if (dateTo) {
-            whereConditions.push('DATE(createdAt) <= ?');
+            whereConditions.push('DATE(o.createdAt) <= ?');
             params.push(dateTo);
         }
 
@@ -154,9 +166,10 @@ async function getAllOrders(filters = {}) {
 
         // Get total count for pagination
         const countQuery = `
-            SELECT COUNT(DISTINCT orderID) as total 
-            FROM orders 
-            ${whereClause}
+            SELECT COUNT(DISTINCT o.orderID) as total 
+            FROM orders o
+            LEFT JOIN users u ON u.uid = o.uid
+            ${whereClause.replace('orders', 'o')}
         `;
         const [countResult] = await db.execute(countQuery, params);
         const total = countResult[0].total;
@@ -164,19 +177,22 @@ async function getAllOrders(filters = {}) {
         // Get orders with pagination - add LIMIT and OFFSET to params
         const ordersQuery = `
             SELECT 
-                orderID,
-                MIN(uid) as uid,
-                MIN(orderStatus) as orderStatus,
-                MIN(paymentMode) as paymentMode,
-                MIN(addressName) as addressName,
-                MIN(addressCity) as addressCity,
-                MIN(addressState) as addressState,
-                MIN(createdAt) as createdAt,
+                o.orderID,
+                MIN(o.uid) as uid,
+                MIN(u.name) as userName,
+                MIN(o.orderStatus) as orderStatus,
+                MIN(o.paymentMode) as paymentMode,
+                MIN(o.addressName) as addressName,
+                MIN(o.addressCity) as addressCity,
+                MIN(o.addressState) as addressState,
+                MIN(o.createdAt) as createdAt,
+                MIN(o.order_amount) as order_amount,
                 COUNT(*) as items
-            FROM orders
-            ${whereClause}
-            GROUP BY orderID
-            ORDER BY orderID DESC
+            FROM orders o
+            LEFT JOIN users u ON u.uid = o.uid
+            ${whereClause.replace('orders', 'o')}
+            GROUP BY o.orderID
+            ORDER BY o.orderID DESC
             LIMIT ? OFFSET ?
         `;
 
@@ -201,13 +217,13 @@ async function getAllOrders(filters = {}) {
 async function calculateOrderTotal(orderID) {
     try {
         const [rows] = await db.execute(
-            'SELECT o.productID, o.boxes, o.units, p.productPrice\n             FROM orders o\n             JOIN products p ON p.productID = o.productID\n             WHERE o.orderID = ?',
+            'SELECT units, productPrice FROM orders WHERE orderID = ?',
             [orderID]
         );
 
         let total = 0;
         for (const r of rows) {
-            const qty = r.units || 0; // Only use units for pricing calculation
+            const qty = r.units || 0;
             const price = Number(r.productPrice || 0);
             total += qty * price;
         }

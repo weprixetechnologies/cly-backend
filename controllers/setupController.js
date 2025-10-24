@@ -1,71 +1,121 @@
 const db = require('../utils/dbconnect');
 
-// Create addresses table
-const createAddressesTable = async (req, res) => {
+// POST /api/setup/add-order-amount-column
+// Adds order_amount column to orders table and updates existing orders
+const addOrderAmountColumn = async (req, res) => {
+    const connection = await db.getConnection();
     try {
-        // Create addresses table
-        await db.execute(`
-            CREATE TABLE IF NOT EXISTS addresses (
-                addressID VARCHAR(50) PRIMARY KEY,
-                userID VARCHAR(50) NOT NULL,
-                name VARCHAR(255) NOT NULL,
-                phone VARCHAR(20) NOT NULL,
-                addressLine1 VARCHAR(500) NOT NULL,
-                addressLine2 VARCHAR(500),
-                city VARCHAR(100) NOT NULL,
-                state VARCHAR(100) NOT NULL,
-                pincode VARCHAR(10) NOT NULL,
-                isDefault BOOLEAN DEFAULT FALSE,
-                createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                INDEX idx_userID (userID),
-                INDEX idx_isDefault (isDefault)
+        await connection.beginTransaction();
+
+        // Check if order_amount column already exists
+        const [columns] = await connection.execute(
+            "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = 'cly' AND TABLE_NAME = 'orders' AND COLUMN_NAME = 'order_amount'"
+        );
+
+        if (columns.length === 0) {
+            // Add the order_amount column
+            await connection.execute(
+                'ALTER TABLE orders ADD COLUMN order_amount DECIMAL(10,2) DEFAULT 0.00 AFTER couponCode'
+            );
+
+            // Add index for better performance
+            await connection.execute(
+                'CREATE INDEX idx_orders_amount ON orders(order_amount)'
+            );
+        } else {
+            console.log('order_amount column already exists, updating existing orders...');
+        }
+
+        // Update existing orders with calculated amounts (sum all products with same orderID)
+        await connection.execute(`
+            UPDATE orders o1 
+            SET order_amount = (
+                SELECT COALESCE(SUM(o2.units * o2.productPrice), 0)
+                FROM orders o2
+                WHERE o2.orderID = o1.orderID
             )
+            WHERE order_amount = 0.00
         `);
 
-        res.status(200).json({
+        await connection.commit();
+
+        return res.status(200).json({
             success: true,
-            message: 'Addresses table created successfully'
+            message: 'order_amount column added successfully and existing orders updated'
         });
     } catch (error) {
-        console.error('Error creating addresses table:', error);
-        res.status(500).json({
+        await connection.rollback();
+        console.error('[setupController] addOrderAmountColumn error:', error.message);
+        return res.status(500).json({
             success: false,
-            message: 'Error creating addresses table',
+            message: 'Failed to add order_amount column',
             error: error.message
         });
+    } finally {
+        connection.release();
     }
 };
 
-// Rename boxQty to boxes in orders table
-const renameBoxQtyToBoxes = async (req, res) => {
+// POST /api/setup/add-product-price-column
+// Adds productPrice column to orders table and updates existing orders
+const addProductPriceColumn = async (req, res) => {
+    const connection = await db.getConnection();
     try {
-        // Check if boxes column already exists
-        const [columns] = await db.execute("SHOW COLUMNS FROM orders LIKE 'boxes'");
+        await connection.beginTransaction();
+
+        // Check if productPrice column already exists
+        const [columns] = await connection.execute(
+            "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = 'cly' AND TABLE_NAME = 'orders' AND COLUMN_NAME = 'productPrice'"
+        );
+
         if (columns.length > 0) {
-            return res.status(200).json({ success: true, message: 'Migration already completed - boxes column exists' });
+            return res.status(200).json({
+                success: true,
+                message: 'productPrice column already exists'
+            });
         }
 
-        // Add the new boxes column
-        await db.execute('ALTER TABLE orders ADD COLUMN boxes INT DEFAULT 0 AFTER boxQty');
-
-        // Copy data from boxQty to boxes
-        await db.execute('UPDATE orders SET boxes = boxQty');
-
-        // Drop the old boxQty column
-        await db.execute('ALTER TABLE orders DROP COLUMN boxQty');
+        // Add the productPrice column
+        await connection.execute(
+            'ALTER TABLE orders ADD COLUMN productPrice DECIMAL(10,2) DEFAULT 0.00 AFTER order_amount'
+        );
 
         // Add index for better performance
-        await db.execute('CREATE INDEX idx_orders_boxes ON orders(boxes)');
+        await connection.execute(
+            'CREATE INDEX idx_orders_product_price ON orders(productPrice)'
+        );
 
-        res.status(200).json({ success: true, message: 'Successfully renamed boxQty to boxes in orders table' });
+        // Update existing orders with product prices from products table
+        await connection.execute(`
+            UPDATE orders o 
+            SET productPrice = (
+                SELECT p.productPrice 
+                FROM products p 
+                WHERE p.productID = o.productID
+            )
+            WHERE productPrice = 0.00
+        `);
+
+        await connection.commit();
+
+        return res.status(200).json({
+            success: true,
+            message: 'productPrice column added successfully and existing orders updated'
+        });
     } catch (error) {
-        console.error('Error renaming boxQty to boxes:', error);
-        res.status(500).json({ success: false, message: 'Failed to rename boxQty to boxes', error: error.message });
+        await connection.rollback();
+        console.error('[setupController] addProductPriceColumn error:', error.message);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to add productPrice column',
+            error: error.message
+        });
+    } finally {
+        connection.release();
     }
 };
 
 module.exports = {
-    createAddressesTable,
-    renameBoxQtyToBoxes
+    addOrderAmountColumn,
+    addProductPriceColumn
 };

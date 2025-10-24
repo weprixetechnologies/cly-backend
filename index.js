@@ -15,7 +15,7 @@ const orderRouter = require('./routers/orderRouter.js');
 const policyRouter = require('./routers/policyRouter.js');
 const contactRouter = require('./routers/contactRouter.js');
 const addressRouter = require('./routers/addressRouter.js');
-const setupController = require('./controllers/setupController.js');
+const setupRouter = require('./routers/setupRouter.js');
 
 // Middleware
 app.use(cors());
@@ -39,10 +39,10 @@ app.use('/api/order', orderRouter);
 app.use('/api/policies', policyRouter);
 app.use('/api/contact', contactRouter);
 app.use('/api/addresses', addressRouter);
+app.use('/api/setup', setupRouter);
 
 // Setup routes (for creating tables)
-app.post('/api/setup/create-addresses-table', setupController.createAddressesTable);
-app.post('/api/setup/rename-boxQty-to-boxes', setupController.renameBoxQtyToBoxes);
+// Additional setup routes can be added here as needed
 
 
 
