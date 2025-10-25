@@ -11,10 +11,39 @@ router.use('/admin', verifyAdminAccessToken);
 // User order routes
 router.post('/user/:uid/place-order', orderController.placeOrder);
 router.get('/user/:uid/orders', orderController.getOrders);
+router.get('/user/:uid/orders/detailed', orderController.getDetailedOrders);
 router.get('/user/:orderID', orderController.getOrderById);
 router.put('/user/:orderID/status', orderController.updateOrderStatus);
 
 // Admin order routes
+
+// Get order statistics (must come before /admin/:orderID routes)
+router.get('/admin/statistics', async (req, res) => {
+    try {
+        const filters = {
+            status: req.query.status || 'all',
+            paymentMode: req.query.paymentMode || 'all',
+            dateFrom: req.query.dateFrom || '',
+            dateTo: req.query.dateTo || ''
+        };
+
+        const orderModel = require('../models/orderModel');
+        const statistics = await orderModel.getOrderStatistics(filters);
+
+        res.status(200).json({
+            success: true,
+            data: statistics
+        });
+    } catch (error) {
+        console.error('[orderRouter] /admin/statistics error:', error.message);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch order statistics',
+            error: error.message
+        });
+    }
+});
+
 // list all orders with filters and pagination: /api/order/admin?status=pending|accepted|rejected|all&page=1&limit=10&search=term&paymentMode=COD&dateFrom=2024-01-01&dateTo=2024-12-31
 router.get('/admin', async (req, res) => {
     try {
@@ -168,6 +197,9 @@ router.put('/admin/:orderID/payment', orderController.updateOrderPayment);
 
 // Get order payment details
 router.get('/admin/:orderID/payment', orderController.getOrderPayment);
+
+// Update order remarks
+router.put('/admin/:orderID/remarks', orderController.updateOrderRemarks);
 
 module.exports = router;
 

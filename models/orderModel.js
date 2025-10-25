@@ -63,8 +63,8 @@ async function createOrderFromCart(orderData) {
             const paymentDate = paymentStatus === 'paid' ? new Date() : null;
 
             await connection.execute(
-                'INSERT INTO orders (orderID, productID, productName, boxes, units, requested_units, accepted_units, acceptance_status, featuredImage, uid, orderStatus, addressName, addressPhone, addressLine1, addressLine2, addressCity, addressState, addressPincode, paymentMode, couponCode, order_amount, productPrice, payment_status, payment_date)\n                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                [orderID, productID, productName, requiredBoxes, units, units, 0, 'pending', featuredImage || '', uid, 'pending', deliveryName, deliveryPhone, address?.addressLine1 || '', address?.addressLine2 || '', address?.city || '', address?.state || '', address?.pincode || '', paymentMode || 'COD', couponCode || '', totalOrderAmount, productPrice, paymentStatus, paymentDate]
+                'INSERT INTO orders (orderID, productID, productName, boxes, units, requested_units, accepted_units, acceptance_status, featuredImage, uid, orderStatus, addressName, addressPhone, addressLine1, addressLine2, addressCity, addressState, addressPincode, paymentMode, couponCode, order_amount, productPrice, pItemPrice, payment_status, payment_date)\n                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                [orderID, productID, productName, requiredBoxes, units, units, 0, 'pending', featuredImage || '', uid, 'pending', deliveryName, deliveryPhone, address?.addressLine1 || '', address?.addressLine2 || '', address?.city || '', address?.state || '', address?.pincode || '', paymentMode || 'COD', couponCode || '', totalOrderAmount, productPrice, productPrice, paymentStatus, paymentDate]
             );
         }
 
@@ -123,9 +123,9 @@ async function updateOrderAcceptance(orderID, productID, acceptedUnits, adminNot
     try {
         await connection.beginTransaction();
 
-        // Get the requested units for this product
+        // Get the requested units and product price for this product
         const [rows] = await connection.execute(
-            'SELECT requested_units FROM orders WHERE orderID = ? AND productID = ?',
+            'SELECT requested_units, pItemPrice FROM orders WHERE orderID = ? AND productID = ?',
             [orderID, productID]
         );
 
@@ -134,6 +134,7 @@ async function updateOrderAcceptance(orderID, productID, acceptedUnits, adminNot
         }
 
         const requestedUnits = rows[0].requested_units;
+        const itemPrice = parseFloat(rows[0].pItemPrice || 0);
         let acceptanceStatus = 'pending';
 
         if (acceptedUnits === 0) {
@@ -148,6 +149,25 @@ async function updateOrderAcceptance(orderID, productID, acceptedUnits, adminNot
         const [result] = await connection.execute(
             'UPDATE orders SET accepted_units = ?, acceptance_status = ?, admin_notes = ? WHERE orderID = ? AND productID = ?',
             [acceptedUnits, acceptanceStatus, adminNotes, orderID, productID]
+        );
+
+        // Recalculate order amount based on accepted units for all products in this order
+        const [allOrderItems] = await connection.execute(
+            'SELECT productID, accepted_units, pItemPrice FROM orders WHERE orderID = ?',
+            [orderID]
+        );
+
+        let newTotalOrderAmount = 0;
+        allOrderItems.forEach(item => {
+            const acceptedUnits = parseInt(item.accepted_units || 0);
+            const itemPrice = parseFloat(item.pItemPrice || 0);
+            newTotalOrderAmount += acceptedUnits * itemPrice;
+        });
+
+        // Update the order amount for all items in this order
+        await connection.execute(
+            'UPDATE orders SET order_amount = ? WHERE orderID = ?',
+            [newTotalOrderAmount, orderID]
         );
 
         // Update the overall order status based on all products
@@ -174,13 +194,50 @@ async function updateOrderAcceptance(orderID, productID, acceptedUnits, adminNot
             [overallStatus, orderID]
         );
 
+        // Recalculate payment status based on new order amount
+        const [paymentRows] = await connection.execute(
+            'SELECT SUM(paid_amount) as total_paid FROM order_payments WHERE orderID = ?',
+            [orderID]
+        );
+        const currentTotalPaid = parseFloat(paymentRows[0]?.total_paid || 0);
+
+        let paymentStatus = 'not_paid';
+        if (currentTotalPaid >= newTotalOrderAmount && newTotalOrderAmount > 0) {
+            paymentStatus = 'paid';
+        } else if (currentTotalPaid > 0) {
+            paymentStatus = 'partially_paid';
+        }
+
+        await connection.execute(
+            'UPDATE orders SET payment_status = ? WHERE orderID = ?',
+            [paymentStatus, orderID]
+        );
+
         await connection.commit();
-        return result.affectedRows > 0;
+        return {
+            success: true,
+            affectedRows: result.affectedRows,
+            newOrderAmount: newTotalOrderAmount,
+            paymentStatus: paymentStatus
+        };
     } catch (error) {
         await connection.rollback();
         throw new Error(`Error updating order acceptance: ${error.message}`);
     } finally {
         connection.release();
+    }
+}
+
+// Update order remarks
+async function updateOrderRemarks(orderID, remarks) {
+    try {
+        const [result] = await db.execute(
+            'UPDATE orders SET remarks = ? WHERE orderID = ?',
+            [remarks, orderID]
+        );
+        return result.affectedRows > 0;
+    } catch (error) {
+        throw new Error(`Error updating order remarks: ${error.message}`);
     }
 }
 
@@ -364,6 +421,26 @@ async function getOrdersByUserId(uid) {
     }
 }
 
+// Get detailed orders by user ID (for user profile page with item details)
+async function getDetailedOrdersByUser(uid) {
+    try {
+        const [rows] = await db.execute(
+            `SELECT 
+                o.*,
+                p.sku,
+                (o.units * o.pItemPrice) as itemTotal
+            FROM orders o 
+            LEFT JOIN products p ON p.productID = o.productID 
+            WHERE o.uid = ? 
+            ORDER BY o.orderID DESC, o.productID`,
+            [uid]
+        );
+        return rows;
+    } catch (error) {
+        throw new Error(`Error fetching detailed user orders: ${error.message}`);
+    }
+}
+
 // Get order payment details
 async function getOrderPayment(orderID) {
     try {
@@ -462,19 +539,253 @@ async function updateOrderPayment(orderID, paidAmount, adminUid, notes = '') {
     }
 }
 
+// Get user statistics (total orders, outstanding, paid, remaining balance)
+async function getUserStatistics(uid) {
+    try {
+        // Get total orders count
+        const [totalOrdersResult] = await db.execute(
+            'SELECT COUNT(DISTINCT orderID) as totalOrders FROM orders WHERE uid = ?',
+            [uid]
+        );
+        const totalOrders = totalOrdersResult[0]?.totalOrders || 0;
+
+        // Get total outstanding amount (orders that are not fully paid)
+        const [outstandingResult] = await db.execute(
+            'SELECT SUM(order_amount) as totalOutstanding FROM orders WHERE uid = ? AND payment_status IN ("not_paid", "partially_paid")',
+            [uid]
+        );
+        const totalOutstanding = outstandingResult[0]?.totalOutstanding || 0;
+
+        // Get total paid amount from order_payments table
+        const [paidResult] = await db.execute(
+            `SELECT SUM(op.paid_amount) as totalPaid 
+             FROM order_payments op 
+             INNER JOIN orders o ON o.orderID = op.orderID 
+             WHERE o.uid = ?`,
+            [uid]
+        );
+        const totalPaid = paidResult[0]?.totalPaid || 0;
+
+        // Calculate remaining balance (outstanding - paid)
+        const remainingBalance = Math.max(0, totalOutstanding - totalPaid);
+
+        return {
+            totalOrders: parseInt(totalOrders),
+            totalOutstanding: parseFloat(totalOutstanding),
+            totalPaid: parseFloat(totalPaid),
+            remainingBalance: parseFloat(remainingBalance)
+        };
+    } catch (error) {
+        throw new Error(`Error fetching user statistics: ${error.message}`);
+    }
+}
+
+// Get comprehensive order statistics for admin
+async function getOrderStatistics(filters = {}) {
+    try {
+        const {
+            dateFrom = '',
+            dateTo = '',
+            status = 'all',
+            paymentMode = 'all'
+        } = filters;
+
+        const params = [];
+        let whereConditions = [];
+
+        // Date range filter
+        if (dateFrom) {
+            whereConditions.push('DATE(o.createdAt) >= ?');
+            params.push(dateFrom);
+        }
+        if (dateTo) {
+            whereConditions.push('DATE(o.createdAt) <= ?');
+            params.push(dateTo);
+        }
+
+        // Status filter
+        if (status && status !== 'all') {
+            whereConditions.push('o.orderStatus = ?');
+            params.push(status);
+        }
+
+        // Payment mode filter
+        if (paymentMode && paymentMode !== 'all') {
+            whereConditions.push('o.paymentMode = ?');
+            params.push(paymentMode);
+        }
+
+        const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+
+        // Get total orders count
+        const [totalOrdersResult] = await db.execute(
+            `SELECT COUNT(DISTINCT o.orderID) as totalOrders FROM orders o ${whereClause}`,
+            params
+        );
+        const totalOrders = totalOrdersResult[0]?.totalOrders || 0;
+
+        // Get orders by status
+        const [statusStatsResult] = await db.execute(
+            `SELECT 
+                o.orderStatus,
+                COUNT(DISTINCT o.orderID) as count,
+                SUM(o.order_amount) as totalAmount
+            FROM orders o 
+            ${whereClause}
+            GROUP BY o.orderStatus`,
+            params
+        );
+
+        const statusStats = {};
+        statusStatsResult.forEach(stat => {
+            statusStats[stat.orderStatus] = {
+                count: parseInt(stat.count),
+                totalAmount: parseFloat(stat.totalAmount || 0)
+            };
+        });
+
+        // Get total order amount
+        const [totalAmountResult] = await db.execute(
+            `SELECT SUM(o.order_amount) as totalAmount FROM orders o ${whereClause}`,
+            params
+        );
+        const totalAmount = totalAmountResult[0]?.totalAmount || 0;
+
+        // Get pending amount (not_paid + partially_paid)
+        const pendingWhereConditions = [...whereConditions];
+        const pendingParams = [...params];
+        pendingWhereConditions.push("o.payment_status IN ('not_paid', 'partially_paid')");
+        const pendingWhereClause = pendingWhereConditions.length > 0 ? `WHERE ${pendingWhereConditions.join(' AND ')}` : '';
+
+        const [pendingAmountResult] = await db.execute(
+            `SELECT SUM(o.order_amount) as pendingAmount 
+             FROM orders o 
+             ${pendingWhereClause}`,
+            pendingParams
+        );
+        const pendingAmount = pendingAmountResult[0]?.pendingAmount || 0;
+
+        // Get paid amount
+        const paidWhereConditions = [...whereConditions];
+        const paidParams = [...params];
+        paidWhereConditions.push("o.payment_status = 'paid'");
+        const paidWhereClause = paidWhereConditions.length > 0 ? `WHERE ${paidWhereConditions.join(' AND ')}` : '';
+
+        const [paidAmountResult] = await db.execute(
+            `SELECT SUM(o.order_amount) as paidAmount 
+             FROM orders o 
+             ${paidWhereClause}`,
+            paidParams
+        );
+        const paidAmount = paidAmountResult[0]?.paidAmount || 0;
+
+        // Get partially paid amount
+        const partiallyPaidWhereConditions = [...whereConditions];
+        const partiallyPaidParams = [...params];
+        partiallyPaidWhereConditions.push("o.payment_status = 'partially_paid'");
+        const partiallyPaidWhereClause = partiallyPaidWhereConditions.length > 0 ? `WHERE ${partiallyPaidWhereConditions.join(' AND ')}` : '';
+
+        const [partiallyPaidResult] = await db.execute(
+            `SELECT SUM(o.order_amount) as partiallyPaidAmount 
+             FROM orders o 
+             ${partiallyPaidWhereClause}`,
+            partiallyPaidParams
+        );
+        const partiallyPaidAmount = partiallyPaidResult[0]?.partiallyPaidAmount || 0;
+
+        // Get orders by payment mode
+        const [paymentModeStatsResult] = await db.execute(
+            `SELECT 
+                o.paymentMode,
+                COUNT(DISTINCT o.orderID) as count,
+                SUM(o.order_amount) as totalAmount
+            FROM orders o 
+            ${whereClause}
+            GROUP BY o.paymentMode`,
+            params
+        );
+
+        const paymentModeStats = {};
+        paymentModeStatsResult.forEach(stat => {
+            paymentModeStats[stat.paymentMode] = {
+                count: parseInt(stat.count),
+                totalAmount: parseFloat(stat.totalAmount || 0)
+            };
+        });
+
+        // Get recent orders (last 7 days)
+        const recentWhereConditions = [...whereConditions];
+        const recentParams = [...params];
+        recentWhereConditions.push("o.createdAt >= DATE_SUB(NOW(), INTERVAL 7 DAY)");
+        const recentWhereClause = recentWhereConditions.length > 0 ? `WHERE ${recentWhereConditions.join(' AND ')}` : '';
+
+        const [recentOrdersResult] = await db.execute(
+            `SELECT COUNT(DISTINCT o.orderID) as recentOrders 
+             FROM orders o 
+             ${recentWhereClause}`,
+            recentParams
+        );
+        const recentOrders = recentOrdersResult[0]?.recentOrders || 0;
+
+        // Get average order value
+        const averageOrderValue = totalOrders > 0 ? totalAmount / totalOrders : 0;
+
+        // Get top products by order count
+        const [topProductsResult] = await db.execute(
+            `SELECT 
+                o.productName,
+                COUNT(DISTINCT o.orderID) as orderCount,
+                SUM(o.units) as totalUnits,
+                SUM(o.order_amount) as totalAmount
+            FROM orders o 
+            ${whereClause}
+            GROUP BY o.productID, o.productName
+            ORDER BY orderCount DESC
+            LIMIT 5`,
+            params
+        );
+
+        return {
+            overview: {
+                totalOrders: parseInt(totalOrders),
+                totalAmount: parseFloat(totalAmount),
+                pendingAmount: parseFloat(pendingAmount),
+                paidAmount: parseFloat(paidAmount),
+                partiallyPaidAmount: parseFloat(partiallyPaidAmount),
+                averageOrderValue: parseFloat(averageOrderValue),
+                recentOrders: parseInt(recentOrders)
+            },
+            statusBreakdown: statusStats,
+            paymentModeBreakdown: paymentModeStats,
+            topProducts: topProductsResult.map(product => ({
+                productName: product.productName,
+                orderCount: parseInt(product.orderCount),
+                totalUnits: parseInt(product.totalUnits),
+                totalAmount: parseFloat(product.totalAmount)
+            }))
+        };
+    } catch (error) {
+        throw new Error(`Error fetching order statistics: ${error.message}`);
+    }
+}
+
 module.exports = {
     createOrderFromCart,
     getOrdersByUser,
     getOrderById,
     updateOrderStatus,
     updateOrderAcceptance,
+    updateOrderRemarks,
     getAllOrders,
     calculateOrderTotal,
     addOutstanding,
     subtractOutstanding,
     getOrdersByUserId,
+    getDetailedOrdersByUser,
     getOrderPayment,
-    updateOrderPayment
+    updateOrderPayment,
+    getUserStatistics,
+    getOrderStatistics
 };
 
 

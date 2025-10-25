@@ -15,7 +15,10 @@ router.post('/login/admin', authController.loginAdmin);
 router.post('/login/user', authController.loginUser);
 
 // Refresh access token
-router.post('/refresh-token', authController.refreshToken);
+router.post('/refresh-token', (req, res) => {
+    console.log('🚀 REFRESH TOKEN ROUTE HIT! 🚀');
+    authController.refreshToken(req, res);
+});
 
 // Logout
 router.post('/logout', authController.logout);

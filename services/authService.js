@@ -208,26 +208,49 @@ async function registerUserRole(userData) {
 
 // Refresh access token
 async function refreshAccessToken(refreshToken) {
+    console.log('[RefreshAccessToken] Starting token refresh process');
+
     try {
         // Verify refresh token
         const decoded = verifyRefreshToken(refreshToken);
+        console.log('[RefreshAccessToken] Token decoded successfully:', {
+            uid: decoded.uid,
+            username: decoded.username,
+            role: decoded.role,
+            type: decoded.type
+        });
 
         // Check if session exists and is valid
         const session = await authModel.getSessionByRefreshToken(refreshToken);
         if (!session) {
-            throw new Error('Invalid refresh token');
+            console.log('[RefreshAccessToken] No valid session found for refresh token');
+            throw new Error('Invalid refresh token - No Session');
         }
+
+        console.log('[RefreshAccessToken] Session found:', {
+            sessionId: session.sessionID,
+            uid: session.uid,
+            expiry: session.expiry
+        });
 
         // Verify the refresh token matches the one in the database
         if (session.refreshToken !== refreshToken) {
+            console.log('[RefreshAccessToken] Refresh token mismatch');
             throw new Error('Refresh token mismatch');
         }
 
         // Get user details
         const user = await authModel.getUserByUID(decoded.uid);
         if (!user) {
+            console.log('[RefreshAccessToken] User not found for UID:', decoded.uid);
             throw new Error('User not found');
         }
+
+        console.log('[RefreshAccessToken] User found:', {
+            uid: user.uid,
+            username: user.username,
+            role: user.role
+        });
 
         // Generate new access token
         const accessTokenPayload = {
@@ -242,6 +265,8 @@ async function refreshAccessToken(refreshToken) {
         // Generate new refresh token
         const refreshTokenPayload = {
             uid: user.uid,
+            username: user.username,
+            role: user.role,
             type: 'refresh'
         };
 
@@ -251,11 +276,16 @@ async function refreshAccessToken(refreshToken) {
         const newExpiry = new Date();
         newExpiry.setDate(newExpiry.getDate() + 30);
 
+        console.log('[RefreshAccessToken] Generated new tokens, updating session...');
+
         // Update session with new refresh token
         const sessionUpdated = await authModel.updateSession(refreshToken, newRefreshToken, newExpiry);
         if (!sessionUpdated) {
+            console.log('[RefreshAccessToken] Failed to update session');
             throw new Error('Failed to update session');
         }
+
+        console.log('[RefreshAccessToken] Session updated successfully');
 
         return {
             success: true,
@@ -273,6 +303,10 @@ async function refreshAccessToken(refreshToken) {
         };
 
     } catch (error) {
+        console.error('[RefreshAccessToken] Error:', {
+            message: error.message,
+            stack: error.stack
+        });
         throw new Error(error.message);
     }
 }

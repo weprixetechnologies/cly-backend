@@ -18,6 +18,9 @@ router.get('/:uid', userManagementController.getUserDetails);
 // Get user orders
 router.get('/:uid/orders', userManagementController.getUserOrders);
 
+// Get user statistics
+router.get('/:uid/statistics', userManagementController.getUserStatistics);
+
 // Update user
 router.put('/:uid', userManagementController.updateUser);
 

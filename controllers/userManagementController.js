@@ -270,6 +270,34 @@ async function getUserOrders(req, res) {
     }
 }
 
+// Get user statistics
+async function getUserStatistics(req, res) {
+    try {
+        const { uid } = req.params;
+
+        if (!uid) {
+            return res.status(400).json({
+                success: false,
+                message: 'User ID is required'
+            });
+        }
+
+        const statistics = await orderModel.getUserStatistics(uid);
+
+        res.status(200).json({
+            success: true,
+            data: statistics
+        });
+    } catch (error) {
+        console.error('Get user statistics error:', error.message);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch user statistics',
+            error: error.message
+        });
+    }
+}
+
 module.exports = {
     getPendingUsers,
     getAllUsers,
@@ -277,5 +305,6 @@ module.exports = {
     rejectUser,
     getUserDetails,
     updateUser,
-    getUserOrders
+    getUserOrders,
+    getUserStatistics
 };

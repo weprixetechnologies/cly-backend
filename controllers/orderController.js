@@ -81,6 +81,22 @@ const getOrders = async (req, res) => {
     }
 };
 
+// GET /:uid/orders/detailed
+const getDetailedOrders = async (req, res) => {
+    try {
+        const { uid } = req.params;
+
+        if (!req.user || req.user.uid !== uid) {
+            return res.status(403).json({ success: false, message: 'Forbidden' });
+        }
+
+        const orders = await orderModel.getDetailedOrdersByUser(uid);
+        return res.status(200).json({ success: true, data: orders });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: 'Failed to fetch detailed orders', error: error.message });
+    }
+};
+
 // GET /:orderID
 const getOrderById = async (req, res) => {
     try {
@@ -159,10 +175,14 @@ const updateOrderAcceptance = async (req, res) => {
             adminNotes || ''
         );
 
-        if (result) {
+        if (result && result.success) {
             return res.status(200).json({
                 success: true,
-                message: 'Order acceptance updated successfully'
+                message: 'Order acceptance updated successfully',
+                data: {
+                    newOrderAmount: result.newOrderAmount,
+                    paymentStatus: result.paymentStatus
+                }
             });
         } else {
             return res.status(404).json({
@@ -246,14 +266,52 @@ const getOrderPayment = async (req, res) => {
     }
 };
 
+// Update order remarks
+const updateOrderRemarks = async (req, res) => {
+    try {
+        const { orderID } = req.params;
+        const { remarks } = req.body;
+
+        if (!orderID) {
+            return res.status(400).json({
+                success: false,
+                message: 'Order ID is required'
+            });
+        }
+
+        const updated = await orderModel.updateOrderRemarks(orderID, remarks || '');
+
+        if (!updated) {
+            return res.status(404).json({
+                success: false,
+                message: 'Order not found'
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            message: 'Order remarks updated successfully'
+        });
+    } catch (error) {
+        console.error('Update order remarks error:', error.message);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to update order remarks',
+            error: error.message
+        });
+    }
+};
+
 module.exports = {
     placeOrder,
     getOrders,
+    getDetailedOrders,
     getOrderById,
     updateOrderStatus,
     updateOrderAcceptance,
     updateOrderPayment,
-    getOrderPayment
+    getOrderPayment,
+    updateOrderRemarks
 };
 
 

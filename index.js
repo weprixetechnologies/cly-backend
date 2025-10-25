@@ -17,15 +17,24 @@ const contactRouter = require('./routers/contactRouter.js');
 const addressRouter = require('./routers/addressRouter.js');
 const setupRouter = require('./routers/setupRouter.js');
 const userManagementRouter = require('./routers/userManagementRouter.js');
+const faqRouter = require('./routers/faqRouter.js');
+const aboutRouter = require('./routers/aboutRouter.js');
 
 // Middleware
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
+
 // Health check endpoint
 app.use('/health', (req, res) => {
-    res.status(200).json({ message: 'Server is running' });
+    res.status(200).json({ message: 'Server is running - UPDATED CODE!' });
+});
+
+// Test endpoint
+app.use('/test', (req, res) => {
+    console.log('🧪 TEST ENDPOINT CALLED! 🧪');
+    res.status(200).json({ message: 'Test endpoint working - logs should appear!' });
 });
 
 // API routes
@@ -42,6 +51,8 @@ app.use('/api/contact', contactRouter);
 app.use('/api/addresses', addressRouter);
 app.use('/api/setup', setupRouter);
 app.use('/api/admin/users', userManagementRouter);
+app.use('/api/faq', faqRouter);
+app.use('/api/about', aboutRouter);
 
 // Setup routes (for creating tables)
 // Additional setup routes can be added here as needed
@@ -50,5 +61,5 @@ app.use('/api/admin/users', userManagementRouter);
 
 
 app.listen(3300, () => {
-    console.log(`Server started on port 3300`);
+    console.log(`🔥🔥🔥 Server started on port 3300 - LOGGING IS WORKING! 🔥🔥🔥`);
 });

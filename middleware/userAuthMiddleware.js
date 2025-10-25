@@ -6,31 +6,42 @@ const verifyUserAccessToken = (req, res, next) => {
         const token =
             req.headers?.authorization?.split(" ")[1]
 
-        console.log('Access Token 1', token);
-        console.log(req.params);
+        console.log('[UserAuth] Access Token:', token ? 'Present' : 'Missing');
+        console.log('[UserAuth] Request URL:', req.originalUrl);
+        console.log('[UserAuth] Request params:', req.params);
 
 
         if (!token) {
-            return res.status(401).json({ message: "Access token missing. Please login." });
+            console.log('[UserAuth] No token found, returning 401');
+            return res.status(401).json({
+                success: false,
+                message: "Access token missing. Please login."
+            });
         }
 
         // 2️⃣ Verify token
         const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET);
+        console.log('[UserAuth] Token verified successfully for user:', decoded.uid || decoded.id);
 
         // 3️⃣ Check expiry manually (optional, jwt.verify already does it)
         if (decoded.exp && decoded.exp * 1000 < Date.now()) {
-            return res.status(401).json({ message: "Access token expired. Please refresh token." });
+            console.log('[UserAuth] Token expired, returning 401');
+            return res.status(401).json({
+                success: false,
+                message: "Access token expired. Please refresh token."
+            });
         }
 
         // 4️⃣ Attach user to req
         req.user = decoded; // contains id, email, role, etc.
-        // console.log(decoded);
 
         // 5️⃣ Move forward
         next();
     } catch (error) {
+        console.log('[UserAuth] Token verification failed:', error.message);
         return res.status(401).json({
-            message: "invalid token",
+            success: false,
+            message: "Invalid token",
             error: error.message
         });
     }
