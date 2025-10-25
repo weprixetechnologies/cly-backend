@@ -20,6 +20,7 @@ const userManagementRouter = require('./routers/userManagementRouter.js');
 const faqRouter = require('./routers/faqRouter.js');
 const aboutRouter = require('./routers/aboutRouter.js');
 const invoiceRouter = require('./routers/invoiceRouter.js');
+const passwordResetRouter = require('./routers/passwordResetRouter.js');
 
 // Middleware
 app.use(cors());
@@ -55,6 +56,7 @@ app.use('/api/admin/users', userManagementRouter);
 app.use('/api/faq', faqRouter);
 app.use('/api/about', aboutRouter);
 app.use('/api/invoice', invoiceRouter);
+app.use('/api/password-reset', passwordResetRouter);
 
 // Setup routes (for creating tables)
 // Additional setup routes can be added here as needed

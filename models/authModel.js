@@ -371,6 +371,19 @@ async function updateUser(uid, updateData) {
     }
 }
 
+// Update user password
+async function updateUserPassword(uid, hashedPassword) {
+    try {
+        const [result] = await db.execute(
+            'UPDATE users SET password = ?, updatedAt = NOW() WHERE uid = ?',
+            [hashedPassword, uid]
+        );
+        return result.affectedRows > 0;
+    } catch (error) {
+        throw new Error(`Error updating user password: ${error.message}`);
+    }
+}
+
 module.exports = {
     checkUsernameExists,
     checkEmailExists,
@@ -393,5 +406,6 @@ module.exports = {
     getAllUsers,
     updateUserApproval,
     getUserByUid,
-    updateUser
+    updateUser,
+    updateUserPassword
 };

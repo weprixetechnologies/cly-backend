@@ -5,7 +5,7 @@ This document provides comprehensive documentation for the authentication system
 
 ## Base URL
 ```
-http://localhost:3000/api/auth
+http://72.60.219.181:3000/api/auth
 ```
 
 ## Authentication Flow
@@ -449,7 +449,7 @@ localStorage.removeItem('refreshToken');
 
 ### Test Registration
 ```bash
-curl -X POST http://localhost:3000/api/auth/register/admin \
+curl -X POST http://72.60.219.181:3000/api/auth/register/admin \
   -H "Content-Type: application/json" \
   -d '{
     "emailID": "test@example.com",
@@ -461,7 +461,7 @@ curl -X POST http://localhost:3000/api/auth/register/admin \
 
 ### Test Login
 ```bash
-curl -X POST http://localhost:3000/api/auth/login/admin \
+curl -X POST http://72.60.219.181:3000/api/auth/login/admin \
   -H "Content-Type: application/json" \
   -d '{
     "emailID": "test@example.com",

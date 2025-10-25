@@ -302,7 +302,7 @@ class InvoiceService {
                 <div class="signature-content">
                     <p><strong>Digitally Signed by:</strong></p>
                     <p><strong>CURSIVE LETTERS Pvt Ltd</strong></p>
-                    <p><strong>Location: Telangana</strong></p>
+                   
                 </div>
             </div>
             <div class="summary-section">

@@ -13,6 +13,7 @@ router.post('/user/:uid/place-order', orderController.placeOrder);
 router.get('/user/:uid/orders', orderController.getOrders);
 router.get('/user/:uid/orders/detailed', orderController.getDetailedOrders);
 router.get('/user/:orderID', orderController.getOrderById);
+router.get('/user/:orderID/payment', orderController.getOrderPayment);
 router.put('/user/:orderID/status', orderController.updateOrderStatus);
 
 // Admin order routes
