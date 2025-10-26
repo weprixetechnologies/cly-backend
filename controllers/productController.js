@@ -473,6 +473,82 @@ const updateInventoryBySku = async (req, res) => {
     }
 };
 
+// Bulk add products (for supplier integration)
+const bulkAddProducts = async (req, res) => {
+    try {
+        const { supplier_token, Data } = req.body;
+
+        // Validate request structure
+        if (!Data || !Array.isArray(Data)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Data must be an array of products'
+            });
+        }
+
+        if (Data.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Data array cannot be empty'
+            });
+        }
+
+        // Validate each product in the array
+        for (let i = 0; i < Data.length; i++) {
+            const product = Data[i];
+
+            if (!product.sku) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Product at index ${i} is missing required field: sku`
+                });
+            }
+
+            if (!product.productName) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Product at index ${i} is missing required field: productName`
+                });
+            }
+        }
+
+        // Process bulk creation
+        const result = await productModel.bulkCreateProducts(Data);
+
+        // Prepare response
+        const response = {
+            success: true,
+            message: `Bulk product creation completed`,
+            data: result
+        };
+
+        // If all products failed, return 400
+        if (result.successful === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'All products failed to create',
+                data: result
+            });
+        }
+
+        // If some products failed, return 207 (Multi-Status)
+        if (result.failed > 0) {
+            return res.status(207).json(response);
+        }
+
+        // If all products succeeded, return 201
+        res.status(201).json(response);
+
+    } catch (error) {
+        console.error('Error in bulk product creation:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to create products in bulk',
+            error: error.message
+        });
+    }
+};
+
 module.exports = {
     addProduct,
     getAllProducts,
@@ -482,5 +558,6 @@ module.exports = {
     getProductsByCategory,
     getCategories,
     createCategory,
-    updateInventoryBySku
+    updateInventoryBySku,
+    bulkAddProducts
 };

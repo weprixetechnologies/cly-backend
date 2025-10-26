@@ -12,3 +12,4 @@ router.post('/reset', passwordResetController.resetPassword);
 router.post('/cleanup', verifyAdminAccessToken, passwordResetController.cleanupExpiredTokens);
 
 module.exports = router;
+

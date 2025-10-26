@@ -80,3 +80,4 @@ class PasswordResetModel {
 }
 
 module.exports = new PasswordResetModel();
+

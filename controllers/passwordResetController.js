@@ -1,8 +1,8 @@
-const crypto = require('crypto');
-const bcrypt = require('bcryptjs');
 const passwordResetModel = require('../models/passwordResetModel');
-const emailService = require('../services/emailService');
 const authModel = require('../models/authModel');
+const emailService = require('../services/emailService');
+const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 
 // Request password reset
 const requestPasswordReset = async (req, res) => {
@@ -18,49 +18,41 @@ const requestPasswordReset = async (req, res) => {
 
         // Check if user exists
         const user = await authModel.getUserByEmail(email);
+
         if (!user) {
-            // Don't reveal if user exists or not for security
+            // For security, don't reveal that email doesn't exist
             return res.status(200).json({
                 success: true,
-                message: 'If an account with that email exists, a password reset link has been sent.'
+                message: 'If a user with that email exists, a password reset link has been sent'
             });
         }
 
         // Generate reset token
         const resetToken = crypto.randomBytes(32).toString('hex');
-        const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour from now
+        const expiresAt = new Date(Date.now() + 3600000); // 1 hour from now
 
-        // Clean up any existing tokens for this user
-        await passwordResetModel.deleteTokensByUserId(user.uid);
-
-        // Create new reset token
+        // Save reset token to database
         await passwordResetModel.createResetToken(user.uid, email, resetToken, expiresAt);
 
-        // Send reset email
-        const emailResult = await emailService.sendPasswordResetEmail(
-            email,
-            resetToken,
-            user.name || user.emailID
-        );
-
-        if (!emailResult.success) {
-            console.error('Failed to send password reset email:', emailResult.error);
-            return res.status(500).json({
-                success: false,
-                message: 'Failed to send password reset email. Please try again later.'
-            });
+        // Send password reset email
+        try {
+            await emailService.sendPasswordResetEmail(email, resetToken, user.name || user.username);
+        } catch (emailError) {
+            console.error('Email sending error:', emailError);
+            // Continue even if email fails
         }
 
         res.status(200).json({
             success: true,
-            message: 'If an account with that email exists, a password reset link has been sent.'
+            message: 'If a user with that email exists, a password reset link has been sent'
         });
 
     } catch (error) {
-        console.error('Request password reset error:', error.message);
+        console.error('Error requesting password reset:', error);
         res.status(500).json({
             success: false,
-            message: 'Internal server error. Please try again later.'
+            message: 'Failed to process password reset request',
+            error: error.message
         });
     }
 };
@@ -77,9 +69,10 @@ const verifyResetToken = async (req, res) => {
             });
         }
 
-        const resetToken = await passwordResetModel.findValidToken(token);
+        // Find valid token
+        const tokenData = await passwordResetModel.findValidToken(token);
 
-        if (!resetToken) {
+        if (!tokenData) {
             return res.status(400).json({
                 success: false,
                 message: 'Invalid or expired reset token'
@@ -88,18 +81,19 @@ const verifyResetToken = async (req, res) => {
 
         res.status(200).json({
             success: true,
-            message: 'Reset token is valid',
+            message: 'Token is valid',
             data: {
-                email: resetToken.email,
-                expiresAt: resetToken.expires_at
+                email: tokenData.email,
+                user_id: tokenData.user_id
             }
         });
 
     } catch (error) {
-        console.error('Verify reset token error:', error.message);
+        console.error('Error verifying reset token:', error);
         res.status(500).json({
             success: false,
-            message: 'Internal server error. Please try again later.'
+            message: 'Failed to verify reset token',
+            error: error.message
         });
     }
 };
@@ -112,7 +106,7 @@ const resetPassword = async (req, res) => {
         if (!token || !newPassword) {
             return res.status(400).json({
                 success: false,
-                message: 'Reset token and new password are required'
+                message: 'Token and new password are required'
             });
         }
 
@@ -123,10 +117,10 @@ const resetPassword = async (req, res) => {
             });
         }
 
-        // Find valid reset token
-        const resetToken = await passwordResetModel.findValidToken(token);
+        // Find valid token
+        const tokenData = await passwordResetModel.findValidToken(token);
 
-        if (!resetToken) {
+        if (!tokenData) {
             return res.status(400).json({
                 success: false,
                 message: 'Invalid or expired reset token'
@@ -134,54 +128,49 @@ const resetPassword = async (req, res) => {
         }
 
         // Hash the new password
-        const hashedPassword = await bcrypt.hash(newPassword, 12);
+        const saltRounds = 10;
+        const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
 
         // Update user password
-        const updateResult = await authModel.updateUserPassword(resetToken.user_id, hashedPassword);
-
-        if (!updateResult) {
-            return res.status(500).json({
-                success: false,
-                message: 'Failed to update password. Please try again.'
-            });
-        }
+        await authModel.updateUserPassword(tokenData.user_id, hashedPassword);
 
         // Mark token as used
         await passwordResetModel.markTokenAsUsed(token);
 
-        // Clean up expired tokens
-        await passwordResetModel.cleanupExpiredTokens();
-
         res.status(200).json({
             success: true,
-            message: 'Password has been reset successfully. You can now login with your new password.'
+            message: 'Password reset successfully'
         });
 
     } catch (error) {
-        console.error('Reset password error:', error.message);
+        console.error('Error resetting password:', error);
         res.status(500).json({
             success: false,
-            message: 'Internal server error. Please try again later.'
+            message: 'Failed to reset password',
+            error: error.message
         });
     }
 };
 
-// Clean up expired tokens (admin endpoint)
+// Cleanup expired tokens (admin only)
 const cleanupExpiredTokens = async (req, res) => {
     try {
         const deletedCount = await passwordResetModel.cleanupExpiredTokens();
 
         res.status(200).json({
             success: true,
-            message: `Cleaned up ${deletedCount} expired tokens`,
-            data: { deletedCount }
+            message: 'Expired tokens cleaned up successfully',
+            data: {
+                deletedTokens: deletedCount
+            }
         });
 
     } catch (error) {
-        console.error('Cleanup expired tokens error:', error.message);
+        console.error('Error cleaning up expired tokens:', error);
         res.status(500).json({
             success: false,
-            message: 'Internal server error'
+            message: 'Failed to cleanup expired tokens',
+            error: error.message
         });
     }
 };
@@ -192,3 +181,4 @@ module.exports = {
     resetPassword,
     cleanupExpiredTokens
 };
+

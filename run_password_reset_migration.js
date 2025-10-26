@@ -42,3 +42,5 @@ async function runPasswordResetMigration() {
 
 // Run the migration
 runPasswordResetMigration();
+
+

@@ -302,6 +302,84 @@ async function checkSkuExists(sku) {
     }
 }
 
+// Bulk create products (for supplier integration)
+async function bulkCreateProducts(productsData) {
+    try {
+        const results = [];
+        const errors = [];
+
+        for (let i = 0; i < productsData.length; i++) {
+            const productData = productsData[i];
+            try {
+                // Check if SKU already exists
+                const existingProduct = await checkSkuExists(productData.sku);
+
+                if (existingProduct) {
+                    errors.push({
+                        index: i,
+                        sku: productData.sku,
+                        error: 'SKU already exists',
+                        action: 'skipped'
+                    });
+                    continue;
+                }
+
+                // Generate unique product ID
+                const productID = await generateUniqueProductID();
+
+                // Map incoming data to database columns
+                const {
+                    sku,
+                    productName,
+                    productPrice,
+                    description = '',
+                    inventory = 0
+                } = productData;
+
+                // Insert product
+                const [result] = await db.execute(
+                    'INSERT INTO products (productID, productName, productPrice, sku, description, inventory) VALUES (?, ?, ?, ?, ?, ?)',
+                    [
+                        productID,
+                        productName,
+                        productPrice || 0,
+
+                        sku,
+                        description,
+                        inventory
+                    ]
+                );
+
+                results.push({
+                    index: i,
+                    sku,
+                    productID,
+                    productName,
+                    status: 'created'
+                });
+
+            } catch (productError) {
+                errors.push({
+                    index: i,
+                    sku: productData.sku || 'undefined',
+                    error: `Failed to create product: ${productError.message}`
+                });
+            }
+        }
+
+        return {
+            total: productsData.length,
+            successful: results.length,
+            failed: errors.length,
+            results,
+            errors
+        };
+
+    } catch (error) {
+        throw new Error(`Error creating products in bulk: ${error.message}`);
+    }
+}
+
 module.exports = {
     createProduct,
     getAllProducts,
@@ -312,5 +390,6 @@ module.exports = {
     createCategory,
     getProductsByCategory,
     updateInventoryBySku,
-    checkSkuExists
+    checkSkuExists,
+    bulkCreateProducts
 };
