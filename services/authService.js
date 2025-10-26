@@ -3,10 +3,15 @@ const crypto = require('crypto');
 const authModel = require('../models/authModel');
 
 // Configuration
-const accessTokenSecret = process.env.JWT_ACCESS_SECRET;
-const refreshTokenSecret = process.env.JWT_REFRESH_SECRET;
+const accessTokenSecret = process.env.JWT_ACCESS_SECRET || 'fallback-access-secret-change-in-production-2024';
+const refreshTokenSecret = process.env.JWT_REFRESH_SECRET || 'fallback-refresh-secret-change-in-production-2024';
 const accessTokenExpiry = process.env.JWT_ACCESS_EXPIRES_IN || '15m';
 const refreshTokenExpiry = process.env.JWT_REFRESH_EXPIRES_IN || '7d';
+
+// Warn if using fallback secrets
+if (!process.env.JWT_ACCESS_SECRET || !process.env.JWT_REFRESH_SECRET) {
+    console.warn('⚠️  Using fallback JWT secrets! Set JWT_ACCESS_SECRET and JWT_REFRESH_SECRET in environment variables for production.');
+}
 
 // Generate unique UID (12-digit alphanumeric)
 function generateUID() {

@@ -17,7 +17,8 @@ const verifyAdminAccessToken = (req, res, next) => {
         }
 
         // 2️⃣ Verify token
-        const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET);
+        const jwtSecret = process.env.JWT_ACCESS_SECRET || 'fallback-access-secret-change-in-production-2024';
+        const decoded = jwt.verify(token, jwtSecret);
 
         // 3️⃣ Check expiry manually (optional, jwt.verify already does it)
         if (decoded.exp && decoded.exp * 1000 < Date.now()) {
