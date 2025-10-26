@@ -302,6 +302,38 @@ async function checkSkuExists(sku) {
     }
 }
 
+// Update product fields by SKU
+async function updateProductBySku(sku, updateFields) {
+    try {
+        const fields = [];
+        const values = [];
+
+        // Build dynamic update query
+        for (const [key, value] of Object.entries(updateFields)) {
+            fields.push(`${key} = ?`);
+            values.push(value);
+        }
+
+        if (fields.length === 0) {
+            throw new Error('No fields to update');
+        }
+
+        // Add updatedAt timestamp
+        fields.push('updatedAt = CURRENT_TIMESTAMP');
+        values.push(sku);
+
+        const query = `UPDATE products SET ${fields.join(', ')} WHERE sku = ?`;
+        const [result] = await db.execute(query, values);
+
+        return {
+            affectedRows: result.affectedRows,
+            changedRows: result.changedRows
+        };
+    } catch (error) {
+        throw new Error(`Error updating product by SKU: ${error.message}`);
+    }
+}
+
 // Bulk create products (for supplier integration)
 async function bulkCreateProducts(productsData) {
     try {
@@ -390,6 +422,7 @@ module.exports = {
     createCategory,
     getProductsByCategory,
     updateInventoryBySku,
+    updateProductBySku,
     checkSkuExists,
     bulkCreateProducts
 };

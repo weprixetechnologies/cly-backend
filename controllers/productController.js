@@ -344,21 +344,20 @@ const createCategory = async (req, res) => {
 // Update inventory by SKU
 const updateInventoryBySku = async (req, res) => {
     try {
-        const products = req.body;
+        const { supplier_token, Data } = req.body;
 
-        // Validate that products is an array
-        if (!Array.isArray(products)) {
+        // Validate request structure
+        if (!Data || !Array.isArray(Data)) {
             return res.status(400).json({
                 success: false,
-                message: 'Request body must be an array of products'
+                message: 'Data must be an array of products'
             });
         }
 
-        // Validate that array is not empty
-        if (products.length === 0) {
+        if (Data.length === 0) {
             return res.status(400).json({
                 success: false,
-                message: 'Products array cannot be empty'
+                message: 'Data array cannot be empty'
             });
         }
 
@@ -366,8 +365,9 @@ const updateInventoryBySku = async (req, res) => {
         const errors = [];
 
         // Process each product in the array
-        for (let i = 0; i < products.length; i++) {
-            const { productName, productPrice, sku, inventory } = products[i];
+        for (let i = 0; i < Data.length; i++) {
+            const product = Data[i];
+            const { sku, inventory, productPrice, productMRP, tax, brand, hsn } = product;
 
             try {
                 // Validate required fields for this product
@@ -376,16 +376,6 @@ const updateInventoryBySku = async (req, res) => {
                         index: i,
                         sku: sku || 'undefined',
                         error: 'SKU and inventory are required'
-                    });
-                    continue;
-                }
-
-                // Validate inventory is a number
-                if (isNaN(inventory) || inventory < 0) {
-                    errors.push({
-                        index: i,
-                        sku,
-                        error: 'Inventory must be a valid non-negative number'
                     });
                     continue;
                 }
@@ -403,15 +393,25 @@ const updateInventoryBySku = async (req, res) => {
                 }
 
                 // Update inventory
-                const result = await productModel.updateInventoryBySku(sku, parseInt(inventory));
+                const inventoryResult = await productModel.updateInventoryBySku(sku, parseInt(inventory));
 
-                if (result.affectedRows === 0) {
+                if (inventoryResult.affectedRows === 0) {
                     errors.push({
                         index: i,
                         sku,
                         error: 'No changes made to the inventory'
                     });
                     continue;
+                }
+
+                // If additional fields are provided, update them too
+                const updateFields = {};
+                if (productPrice !== undefined) updateFields.productPrice = productPrice;
+
+
+                // Update additional fields if any
+                if (Object.keys(updateFields).length > 0) {
+                    await productModel.updateProductBySku(sku, updateFields);
                 }
 
                 // Add to successful results
@@ -436,9 +436,9 @@ const updateInventoryBySku = async (req, res) => {
         // Prepare response
         const response = {
             success: true,
-            message: `Processed ${products.length} products`,
+            message: `Processed ${Data.length} products`,
             data: {
-                totalProcessed: products.length,
+                total: Data.length,
                 successful: results.length,
                 failed: errors.length,
                 results,
