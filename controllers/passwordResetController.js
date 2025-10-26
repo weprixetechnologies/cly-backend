@@ -21,9 +21,12 @@ const requestPasswordReset = async (req, res) => {
         }
 
         // Check if user exists
+        console.log('🔍 Checking if user exists in database...');
         const user = await authModel.getUserByEmail(email);
+        console.log('🔍 User lookup result:', user ? 'User found' : 'User not found');
 
         if (!user) {
+            console.log('❌ User not found for email:', email);
             // For security, don't reveal that email doesn't exist
             return res.status(200).json({
                 success: true,
@@ -31,12 +34,21 @@ const requestPasswordReset = async (req, res) => {
             });
         }
 
+        console.log('✅ User found:', {
+            uid: user.uid,
+            name: user.name || user.username,
+            email: user.emailID
+        });
+
         // Generate reset token
         const resetToken = crypto.randomBytes(32).toString('hex');
         const expiresAt = new Date(Date.now() + 3600000); // 1 hour from now
+        console.log('🔐 Generated reset token');
 
         // Save reset token to database
+        console.log('💾 Saving reset token to database...');
         await passwordResetModel.createResetToken(user.uid, email, resetToken, expiresAt);
+        console.log('✅ Reset token saved to database');
 
         // Send password reset email
         console.log('🚀 Starting password reset email process...');
