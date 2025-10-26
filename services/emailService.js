@@ -21,7 +21,7 @@ class EmailService {
         });
 
         this.transporter = nodemailer.createTransport(smtpConfig);
-        
+
         // Verify connection on initialization (non-blocking)
         this.initializeEmail().catch(err => {
             console.error('⚠️ Email service initialization warning:', err.message);

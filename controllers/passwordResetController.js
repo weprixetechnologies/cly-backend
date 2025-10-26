@@ -6,8 +6,12 @@ const crypto = require('crypto');
 
 // Request password reset
 const requestPasswordReset = async (req, res) => {
+    console.log('🔥 Password reset request received!');
+    console.log('Request body:', req.body);
+
     try {
         const { email } = req.body;
+        console.log('Extracted email:', email);
 
         if (!email) {
             return res.status(400).json({
@@ -38,10 +42,10 @@ const requestPasswordReset = async (req, res) => {
         console.log('🚀 Starting password reset email process...');
         console.log('📧 Email:', email);
         console.log('👤 User:', user.name || user.username);
-        
+
         try {
             const emailResult = await emailService.sendPasswordResetEmail(email, resetToken, user.name || user.username);
-            
+
             if (emailResult.success) {
                 console.log('✅ Email sent successfully!');
             } else {

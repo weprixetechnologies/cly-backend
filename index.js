@@ -24,6 +24,14 @@ const passwordResetRouter = require('./routers/passwordResetRouter.js');
 
 // Middleware
 app.use(cors());
+
+// Request logging middleware - MUST be before routes
+app.use((req, res, next) => {
+    console.log(`📍 Incoming request: ${req.method} ${req.url}`);
+    console.log(`📍 Content-Type: ${req.headers['content-type']}`);
+    next();
+});
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
