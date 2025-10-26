@@ -25,12 +25,7 @@ const passwordResetRouter = require('./routers/passwordResetRouter.js');
 // Middleware
 app.use(cors());
 
-// Request logging middleware - MUST be before routes
-app.use((req, res, next) => {
-    console.log(`📍 Incoming request: ${req.method} ${req.url}`);
-    console.log(`📍 Content-Type: ${req.headers['content-type']}`);
-    next();
-});
+
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
@@ -69,9 +64,6 @@ app.use('/api/password-reset', passwordResetRouter);
 // Setup routes (for creating tables)
 // Additional setup routes can be added here as needed
 
-
-
-
 app.listen(3300, () => {
-    console.log(`🔥🔥🔥 Server started on port 3300 - LOGGING IS WORKING! 🔥🔥🔥`);
+    console.log(` Server started on port 3300 - LOGGING IS WORKING! `);
 });

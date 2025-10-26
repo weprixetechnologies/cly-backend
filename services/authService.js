@@ -3,8 +3,8 @@ const crypto = require('crypto');
 const authModel = require('../models/authModel');
 
 // Configuration
-const accessTokenSecret = process.env.JWT_ACCESS_SECRET || 'fallback-access-secret-change-in-production-2024';
-const refreshTokenSecret = process.env.JWT_REFRESH_SECRET || 'fallback-refresh-secret-change-in-production-2024';
+const accessTokenSecret = process.env.JWT_ACCESS_SECRET || 'cly2025a';
+const refreshTokenSecret = process.env.JWT_REFRESH_SECRET || 'cly2025a';
 const accessTokenExpiry = process.env.JWT_ACCESS_EXPIRES_IN || '15m';
 const refreshTokenExpiry = process.env.JWT_REFRESH_EXPIRES_IN || '7d';
 

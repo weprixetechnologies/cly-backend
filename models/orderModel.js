@@ -95,7 +95,17 @@ async function getOrdersByUser(uid) {
 async function getOrderById(orderID) {
     try {
         const [rows] = await db.execute(
-            'SELECT o.*, u.name as userName, p.sku, p.inventory FROM orders o LEFT JOIN users u ON u.uid = o.uid LEFT JOIN products p ON p.productID = o.productID WHERE o.orderID = ? ORDER BY o.productID',
+            `SELECT 
+                o.*, 
+                u.name as userName, 
+                p.sku, 
+                p.inventory,
+                (GREATEST(COALESCE(o.accepted_units, o.units, 0), 0) * o.pItemPrice) as itemTotal
+            FROM orders o 
+            LEFT JOIN users u ON u.uid = o.uid 
+            LEFT JOIN products p ON p.productID = o.productID 
+            WHERE o.orderID = ? 
+            ORDER BY o.productID`,
             [orderID]
         );
         return rows;
@@ -428,7 +438,7 @@ async function getDetailedOrdersByUser(uid) {
             `SELECT 
                 o.*,
                 p.sku,
-                (o.units * o.pItemPrice) as itemTotal
+                (GREATEST(COALESCE(o.accepted_units, o.units, 0), 0) * o.pItemPrice) as itemTotal
             FROM orders o 
             LEFT JOIN products p ON p.productID = o.productID 
             WHERE o.uid = ? 

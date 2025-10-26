@@ -156,7 +156,7 @@ SMTP_PORT=587
 SMTP_SECURE=false
 SMTP_USER=vishal0077@gmail.com
 SMTP_PASS=your-app-password-here
-FRONTEND_URL=http://localhost:3000
+FRONTEND_URL=http://72.60.219.181:3000
 COMPANY_NAME=Cly App
 ```
 

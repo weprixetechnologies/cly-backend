@@ -347,11 +347,19 @@ async function bulkCreateProducts(productsData) {
                 const existingProduct = await checkSkuExists(productData.sku);
 
                 if (existingProduct) {
-                    errors.push({
+                    // SKU exists, update only the inventory
+                    const { inventory = 0 } = productData;
+
+                    const inventoryResult = await updateInventoryBySku(productData.sku, parseInt(inventory));
+
+                    results.push({
                         index: i,
                         sku: productData.sku,
-                        error: 'SKU already exists',
-                        action: 'skipped'
+                        productID: existingProduct.productID,
+                        productName: existingProduct.productName,
+                        oldInventory: existingProduct.inventory,
+                        newInventory: parseInt(inventory),
+                        status: 'updated_inventory'
                     });
                     continue;
                 }
@@ -394,7 +402,7 @@ async function bulkCreateProducts(productsData) {
                 errors.push({
                     index: i,
                     sku: productData.sku || 'undefined',
-                    error: `Failed to create product: ${productError.message}`
+                    error: `Failed to process: ${productError.message}`
                 });
             }
         }
