@@ -2,15 +2,28 @@ const nodemailer = require('nodemailer');
 
 class EmailService {
     constructor() {
-        this.transporter = nodemailer.createTransport({
+        // Use environment variables with fallback to hardcoded values
+        const smtpConfig = {
             host: process.env.SMTP_HOST || 'smtp.gmail.com',
-            port: process.env.SMTP_PORT || 587,
-            secure: false, // true for 465, false for other ports
+            port: parseInt(process.env.SMTP_PORT) || 587,
+            secure: process.env.SMTP_SECURE === 'true', // true for 465, false for other ports
             auth: {
                 user: process.env.SMTP_USER || 'vishal0077@gmail.com',
                 pass: process.env.SMTP_PASS || 'guut cccy vsoz wtxr'
             }
+        };
+
+        console.log('🔧 Email Service Configuration:', {
+            host: smtpConfig.host,
+            port: smtpConfig.port,
+            secure: smtpConfig.secure,
+            user: smtpConfig.auth.user
         });
+
+        this.transporter = nodemailer.createTransport(smtpConfig);
+
+        // Verify connection on initialization
+        this.testConnection();
     }
 
     async sendPasswordResetEmail(email, resetToken, userName) {
@@ -25,12 +38,26 @@ class EmailService {
             html: htmlTemplate
         };
 
+        console.log('📧 Attempting to send email to:', email);
+        console.log('📧 Email configuration:', {
+            from: mailOptions.from,
+            to: mailOptions.to,
+            subject: mailOptions.subject
+        });
+
         try {
             const result = await this.transporter.sendMail(mailOptions);
-            console.log('Password reset email sent successfully:', result.messageId);
+            console.log('✅ Password reset email sent successfully!');
+            console.log('Message ID:', result.messageId);
+            console.log('Response:', result.response);
             return { success: true, messageId: result.messageId };
         } catch (error) {
-            console.error('Error sending password reset email:', error);
+            console.error('❌ Error sending password reset email:');
+            console.error('Error message:', error.message);
+            console.error('Error code:', error.code);
+            console.error('Error command:', error.command);
+            console.error('Error response:', error.response);
+            console.error('Full error:', error);
             return { success: false, error: error.message };
         }
     }
@@ -267,11 +294,20 @@ class EmailService {
 
     async testConnection() {
         try {
-            await this.transporter.verify();
-            console.log('Email service connection verified successfully');
+            console.log('🔍 Testing email service connection...');
+            const result = await this.transporter.verify();
+            console.log('✅ Email service connection verified successfully!');
             return true;
         } catch (error) {
-            console.error('Email service connection failed:', error);
+            console.error('❌ Email service connection failed!');
+            console.error('Error message:', error.message);
+            console.error('Error code:', error.code);
+            console.error('Full error:', error);
+            console.log('💡 Troubleshooting tips:');
+            console.log('   1. Check if Gmail app password is correct');
+            console.log('   2. Enable "Less secure app access" or use app password');
+            console.log('   3. Check firewall/network restrictions on port 587');
+            console.log('   4. Verify SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS env variables');
             return false;
         }
     }
