@@ -35,11 +35,22 @@ const requestPasswordReset = async (req, res) => {
         await passwordResetModel.createResetToken(user.uid, email, resetToken, expiresAt);
 
         // Send password reset email
+        console.log('🚀 Starting password reset email process...');
+        console.log('📧 Email:', email);
+        console.log('👤 User:', user.name || user.username);
+        
         try {
-            await emailService.sendPasswordResetEmail(email, resetToken, user.name || user.username);
+            const emailResult = await emailService.sendPasswordResetEmail(email, resetToken, user.name || user.username);
+            
+            if (emailResult.success) {
+                console.log('✅ Email sent successfully!');
+            } else {
+                console.error('❌ Email failed to send:', emailResult.error);
+            }
         } catch (emailError) {
-            console.error('Email sending error:', emailError);
-            // Continue even if email fails
+            console.error('❌ Email sending error:', emailError);
+            console.error('Error stack:', emailError.stack);
+            // Continue even if email fails - don't reveal error to user
         }
 
         res.status(200).json({

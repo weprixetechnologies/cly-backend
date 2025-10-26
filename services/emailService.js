@@ -21,12 +21,29 @@ class EmailService {
         });
 
         this.transporter = nodemailer.createTransport(smtpConfig);
+        
+        // Verify connection on initialization (non-blocking)
+        this.initializeEmail().catch(err => {
+            console.error('⚠️ Email service initialization warning:', err.message);
+            console.log('📧 Emails may not work until SMTP is properly configured');
+        });
+    }
 
-        // Verify connection on initialization
-        this.testConnection();
+    async initializeEmail() {
+        console.log('📧 Initializing email service...');
+        const result = await this.testConnection();
+        if (result) {
+            console.log('✅ Email service ready!');
+        }
+        return result;
     }
 
     async sendPasswordResetEmail(email, resetToken, userName) {
+        console.log('📧 ========================================');
+        console.log('📧 CALLING sendPasswordResetEmail');
+        console.log('📧 Email:', email);
+        console.log('📧 User:', userName);
+        console.log('📧 Token:', resetToken.substring(0, 10) + '...');
         const resetUrl = `${process.env.FRONTEND_URL || 'http://72.60.219.181:3000'}/reset-password?token=${resetToken}`;
 
         const htmlTemplate = this.generatePasswordResetTemplate(userName, resetUrl, email);
@@ -44,6 +61,7 @@ class EmailService {
             to: mailOptions.to,
             subject: mailOptions.subject
         });
+        console.log('📧 Reset URL:', resetUrl);
 
         try {
             const result = await this.transporter.sendMail(mailOptions);
