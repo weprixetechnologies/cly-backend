@@ -64,6 +64,6 @@ app.use('/api/password-reset', passwordResetRouter);
 // Setup routes (for creating tables)
 // Additional setup routes can be added here as needed
 
-app.listen(3300, () => {
+app.listen(8800, () => {
     console.log(` Server started on port 3300 - LOGGING IS WORKING! `);
 });

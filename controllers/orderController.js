@@ -302,6 +302,74 @@ const updateOrderRemarks = async (req, res) => {
     }
 };
 
+// Update specific payment entry
+const updatePaymentEntry = async (req, res) => {
+    try {
+        const { orderID, paymentId } = req.params;
+        const { paidAmount, notes } = req.body;
+        const adminUid = req.user.uid;
+
+        if (!orderID || !paymentId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Order ID and Payment ID are required'
+            });
+        }
+
+        if (!paidAmount || isNaN(parseFloat(paidAmount))) {
+            return res.status(400).json({
+                success: false,
+                message: 'Valid paid amount is required'
+            });
+        }
+
+        const result = await orderModel.updatePaymentEntry(orderID, paymentId, paidAmount, adminUid, notes || '');
+
+        res.status(200).json({
+            success: true,
+            message: 'Payment entry updated successfully',
+            data: result
+        });
+    } catch (error) {
+        console.error('Update payment entry error:', error.message);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to update payment entry',
+            error: error.message
+        });
+    }
+};
+
+// Delete specific payment entry
+const deletePaymentEntry = async (req, res) => {
+    try {
+        const { orderID, paymentId } = req.params;
+        const adminUid = req.user.uid;
+
+        if (!orderID || !paymentId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Order ID and Payment ID are required'
+            });
+        }
+
+        const result = await orderModel.deletePaymentEntry(orderID, paymentId, adminUid);
+
+        res.status(200).json({
+            success: true,
+            message: 'Payment entry deleted successfully',
+            data: result
+        });
+    } catch (error) {
+        console.error('Delete payment entry error:', error.message);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to delete payment entry',
+            error: error.message
+        });
+    }
+};
+
 module.exports = {
     placeOrder,
     getOrders,
@@ -311,7 +379,9 @@ module.exports = {
     updateOrderAcceptance,
     updateOrderPayment,
     getOrderPayment,
-    updateOrderRemarks
+    updateOrderRemarks,
+    updatePaymentEntry,
+    deletePaymentEntry
 };
 
 

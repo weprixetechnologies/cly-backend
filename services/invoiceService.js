@@ -3,7 +3,7 @@ const db = require('../utils/dbconnect');
 class InvoiceService {
     constructor() {
         this.companyInfo = {
-            name: "CURSIVE LETTERS Pvt Ltd",
+            name: "Cursive Letters LY",
             address: {
                 line1: "The Best You Get",
             }
@@ -153,7 +153,7 @@ class InvoiceService {
             <div class="logo">
                 <div style="width:150px;height:150px;background:#1e40af;display:flex;flex-direction:column;justify-content:center;align-items:center;color:white;font-weight:bold;border-radius:4px;">
                     <div style="font-size:20px;line-height:1.1;">CURSIVE</div>
-                    <div style="font-size:10px;margin-top:2px;">LETTERS</div>
+                    <div style="font-size:10px;margin-top:2px;">LETTERS LY</div>
                 </div>
             </div>
             <div class="company-info">
@@ -301,7 +301,7 @@ class InvoiceService {
             <div class="signature-section">
                 <div class="signature-content">
                     <p><strong>Digitally Signed by:</strong></p>
-                    <p><strong>CURSIVE LETTERS Pvt Ltd</strong></p>
+                    <p><strong>Cursive Letters LY</strong></p>
                    
                 </div>
             </div>

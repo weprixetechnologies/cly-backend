@@ -549,22 +549,181 @@ async function updateOrderPayment(orderID, paidAmount, adminUid, notes = '') {
     }
 }
 
-// Get user statistics (total orders, outstanding, paid, remaining balance)
+// Update specific payment entry
+async function updatePaymentEntry(orderID, paymentId, paidAmount, adminUid, notes = '') {
+    const connection = await db.getConnection();
+    try {
+        await connection.beginTransaction();
+
+        // Get order details to calculate total amount
+        const [orderRows] = await connection.execute(
+            'SELECT * FROM orders WHERE orderID = ?',
+            [orderID]
+        );
+
+        if (orderRows.length === 0) {
+            throw new Error('Order not found');
+        }
+
+        const totalOrderAmount = parseFloat(orderRows[0]?.order_amount || 0);
+        const newPaidAmount = parseFloat(paidAmount);
+
+        // Validate paid amount
+        if (newPaidAmount < 0) {
+            throw new Error('Paid amount cannot be negative');
+        }
+        if (newPaidAmount > totalOrderAmount) {
+            throw new Error('Paid amount cannot exceed total order amount');
+        }
+
+        // Get the old payment amount
+        const [oldPaymentRows] = await connection.execute(
+            'SELECT paid_amount FROM order_payments WHERE id = ? AND orderID = ?',
+            [paymentId, orderID]
+        );
+
+        if (oldPaymentRows.length === 0) {
+            throw new Error('Payment entry not found');
+        }
+
+        const oldPaidAmount = parseFloat(oldPaymentRows[0].paid_amount);
+        const paidDifference = newPaidAmount - oldPaidAmount;
+
+        // Update the payment entry
+        await connection.execute(
+            'UPDATE order_payments SET paid_amount = ?, notes = ?, admin_uid = ?, updatedAt = NOW() WHERE id = ? AND orderID = ?',
+            [newPaidAmount, notes, adminUid, paymentId, orderID]
+        );
+
+        // Recalculate payment status
+        const [paymentRows] = await connection.execute(
+            'SELECT SUM(paid_amount) as total_paid FROM order_payments WHERE orderID = ?',
+            [orderID]
+        );
+        const totalAccumulatedPayments = parseFloat(paymentRows[0]?.total_paid || 0);
+
+        let paymentStatus = 'not_paid';
+        if (totalAccumulatedPayments >= totalOrderAmount) {
+            paymentStatus = 'paid';
+        } else if (totalAccumulatedPayments > 0) {
+            paymentStatus = 'partially_paid';
+        }
+
+        await connection.execute(
+            'UPDATE orders SET payment_status = ? WHERE orderID = ?',
+            [paymentStatus, orderID]
+        );
+
+        // Update user outstanding if there's a difference
+        if (paidDifference !== 0) {
+            const uid = orderRows[0].uid;
+            if (paidDifference > 0) {
+                // Reduce outstanding (payment increased)
+                await subtractOutstanding(uid, paidDifference, connection);
+            } else {
+                // Increase outstanding (payment decreased)
+                await addOutstanding(uid, Math.abs(paidDifference), connection);
+            }
+        }
+
+        await connection.commit();
+        return {
+            success: true,
+            paidAmount: newPaidAmount,
+            totalOrderAmount: totalOrderAmount,
+            outstandingChange: paidDifference
+        };
+    } catch (error) {
+        await connection.rollback();
+        throw new Error(`Error updating payment entry: ${error.message}`);
+    } finally {
+        connection.release();
+    }
+}
+
+// Delete specific payment entry
+async function deletePaymentEntry(orderID, paymentId, adminUid) {
+    const connection = await db.getConnection();
+    try {
+        await connection.beginTransaction();
+
+        // Get order details
+        const [orderRows] = await connection.execute(
+            'SELECT * FROM orders WHERE orderID = ?',
+            [orderID]
+        );
+
+        if (orderRows.length === 0) {
+            throw new Error('Order not found');
+        }
+
+        const totalOrderAmount = parseFloat(orderRows[0]?.order_amount || 0);
+
+        // Get the payment amount to be deleted
+        const [paymentRows] = await connection.execute(
+            'SELECT paid_amount FROM order_payments WHERE id = ? AND orderID = ?',
+            [paymentId, orderID]
+        );
+
+        if (paymentRows.length === 0) {
+            throw new Error('Payment entry not found');
+        }
+
+        const deletedAmount = parseFloat(paymentRows[0].paid_amount);
+
+        // Delete the payment entry
+        await connection.execute(
+            'DELETE FROM order_payments WHERE id = ? AND orderID = ?',
+            [paymentId, orderID]
+        );
+
+        // Recalculate payment status
+        const [remainingPayments] = await connection.execute(
+            'SELECT SUM(paid_amount) as total_paid FROM order_payments WHERE orderID = ?',
+            [orderID]
+        );
+        const totalAccumulatedPayments = parseFloat(remainingPayments[0]?.total_paid || 0);
+
+        let paymentStatus = 'not_paid';
+        if (totalAccumulatedPayments >= totalOrderAmount) {
+            paymentStatus = 'paid';
+        } else if (totalAccumulatedPayments > 0) {
+            paymentStatus = 'partially_paid';
+        }
+
+        await connection.execute(
+            'UPDATE orders SET payment_status = ? WHERE orderID = ?',
+            [paymentStatus, orderID]
+        );
+
+        // Update user outstanding (increase by deleted amount)
+        const uid = orderRows[0].uid;
+        await addOutstanding(uid, deletedAmount, connection);
+
+        await connection.commit();
+        return {
+            success: true,
+            deletedAmount: deletedAmount,
+            totalOrderAmount: totalOrderAmount,
+            outstandingChange: deletedAmount
+        };
+    } catch (error) {
+        await connection.rollback();
+        throw new Error(`Error deleting payment entry: ${error.message}`);
+    } finally {
+        connection.release();
+    }
+}
+
+// Get user statistics (total orders amount, paid, remaining balance)
 async function getUserStatistics(uid) {
     try {
-        // Get total orders count
-        const [totalOrdersResult] = await db.execute(
-            'SELECT COUNT(DISTINCT orderID) as totalOrders FROM orders WHERE uid = ?',
+        // Get total orders amount (sum of all order amounts)
+        const [totalOrdersAmountResult] = await db.execute(
+            'SELECT SUM(order_amount) as totalOrdersAmount FROM orders WHERE uid = ?',
             [uid]
         );
-        const totalOrders = totalOrdersResult[0]?.totalOrders || 0;
-
-        // Get total outstanding amount (orders that are not fully paid)
-        const [outstandingResult] = await db.execute(
-            'SELECT SUM(order_amount) as totalOutstanding FROM orders WHERE uid = ? AND payment_status IN ("not_paid", "partially_paid")',
-            [uid]
-        );
-        const totalOutstanding = outstandingResult[0]?.totalOutstanding || 0;
+        const totalOrdersAmount = totalOrdersAmountResult[0]?.totalOrdersAmount || 0;
 
         // Get total paid amount from order_payments table
         const [paidResult] = await db.execute(
@@ -576,14 +735,13 @@ async function getUserStatistics(uid) {
         );
         const totalPaid = paidResult[0]?.totalPaid || 0;
 
-        // Calculate remaining balance (outstanding - paid)
-        const remainingBalance = Math.max(0, totalOutstanding - totalPaid);
+        // Calculate remaining amount (total orders amount - total paid)
+        const remainingAmount = Math.max(0, totalOrdersAmount - totalPaid);
 
         return {
-            totalOrders: parseInt(totalOrders),
-            totalOutstanding: parseFloat(totalOutstanding),
+            totalOrdersAmount: parseFloat(totalOrdersAmount),
             totalPaid: parseFloat(totalPaid),
-            remainingBalance: parseFloat(remainingBalance)
+            remainingAmount: parseFloat(remainingAmount)
         };
     } catch (error) {
         throw new Error(`Error fetching user statistics: ${error.message}`);
@@ -794,6 +952,8 @@ module.exports = {
     getDetailedOrdersByUser,
     getOrderPayment,
     updateOrderPayment,
+    updatePaymentEntry,
+    deletePaymentEntry,
     getUserStatistics,
     getOrderStatistics
 };

@@ -44,7 +44,7 @@ class EmailService {
         console.log('📧 Email:', email);
         console.log('📧 User:', userName);
         console.log('📧 Token:', resetToken.substring(0, 10) + '...');
-        const resetUrl = `${process.env.FRONTEND_URL || 'http://72.60.219.181:3000'}/reset-password?token=${resetToken}`;
+        const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password?token=${resetToken}`;
 
         const htmlTemplate = this.generatePasswordResetTemplate(userName, resetUrl, email);
 

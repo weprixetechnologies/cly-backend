@@ -199,6 +199,12 @@ router.put('/admin/:orderID/payment', orderController.updateOrderPayment);
 // Get order payment details
 router.get('/admin/:orderID/payment', orderController.getOrderPayment);
 
+// Update specific payment entry
+router.put('/admin/:orderID/payment/:paymentId', orderController.updatePaymentEntry);
+
+// Delete specific payment entry
+router.delete('/admin/:orderID/payment/:paymentId', orderController.deletePaymentEntry);
+
 // Update order remarks
 router.put('/admin/:orderID/remarks', orderController.updateOrderRemarks);
 
