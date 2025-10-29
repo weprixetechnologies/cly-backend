@@ -24,6 +24,8 @@ const requestPasswordReset = async (req, res) => {
         console.log('🔍 Checking if user exists in database...');
         const user = await authModel.getUserByEmail(email);
         console.log('🔍 User lookup result:', user ? 'User found' : 'User not found');
+        console.log('new code');
+
 
         if (!user) {
             console.log('❌ User not found for email:', email);
