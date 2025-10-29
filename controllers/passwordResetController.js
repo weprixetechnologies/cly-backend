@@ -27,6 +27,8 @@ const requestPasswordReset = async (req, res) => {
 
         if (!user) {
             console.log('❌ User not found for email:', email);
+            console.log('NEW CODE');
+
             return res.status(400).json({
                 success: false,
                 message: 'No account found with this email address'
