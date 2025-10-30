@@ -165,6 +165,12 @@ router.put('/admin/acceptance', async (req, res) => {
         }
 
         const orderModel = require('../models/orderModel');
+        // Disallow edits when order is accepted
+        const statusRows = await orderModel.getOrderById(orderID);
+        const currentStatus = String(statusRows?.[0]?.orderStatus || 'pending');
+        if (currentStatus === 'accepted') {
+            return res.status(200).json({ success: false, message: 'Order is accepted. Change status to pending to edit.' });
+        }
         const result = await orderModel.updateOrderAcceptance(
             orderID,
             productID,

@@ -75,7 +75,19 @@ const getOrders = async (req, res) => {
         }
 
         const orders = await orderModel.getOrdersByUser(uid);
-        return res.status(200).json({ success: true, data: orders });
+        // Hide payment/acceptance fields for non-accepted orders from user
+        const sanitized = (orders || []).map((row) => {
+            if (String(row.orderStatus) !== 'accepted') {
+                const { accepted_units, acceptance_status, admin_notes, payment_status, payment_date, ...rest } = row;
+                return {
+                    ...rest,
+                    // Normalize user-visible status while pending
+                    acceptance_status: 'pending'
+                };
+            }
+            return row;
+        });
+        return res.status(200).json({ success: true, data: sanitized });
     } catch (error) {
         return res.status(500).json({ success: false, message: 'Failed to fetch orders', error: error.message });
     }
@@ -91,7 +103,17 @@ const getDetailedOrders = async (req, res) => {
         }
 
         const orders = await orderModel.getDetailedOrdersByUser(uid);
-        return res.status(200).json({ success: true, data: orders });
+        const sanitized = (orders || []).map((row) => {
+            if (String(row.orderStatus) !== 'accepted') {
+                const { accepted_units, acceptance_status, admin_notes, payment_status, payment_date, ...rest } = row;
+                return {
+                    ...rest,
+                    acceptance_status: 'pending'
+                };
+            }
+            return row;
+        });
+        return res.status(200).json({ success: true, data: sanitized });
     } catch (error) {
         return res.status(500).json({ success: false, message: 'Failed to fetch detailed orders', error: error.message });
     }
@@ -113,7 +135,16 @@ const getOrderById = async (req, res) => {
             return res.status(403).json({ success: false, message: 'Forbidden' });
         }
 
-        return res.status(200).json({ success: true, data: rows });
+        // Hide payment/acceptance fields for non-accepted orders from user
+        const orderStatus = String(rows?.[0]?.orderStatus || 'pending');
+        let data = rows;
+        if (orderStatus !== 'accepted') {
+            data = (rows || []).map((row) => {
+                const { accepted_units, acceptance_status, admin_notes, payment_status, payment_date, ...rest } = row;
+                return { ...rest, acceptance_status: 'pending' };
+            });
+        }
+        return res.status(200).json({ success: true, data });
     } catch (error) {
         return res.status(500).json({ success: false, message: 'Failed to fetch order', error: error.message });
     }
@@ -221,6 +252,16 @@ const updateOrderPayment = async (req, res) => {
             });
         }
 
+        // Block edits when order is accepted
+        const rows = await orderModel.getOrderById(orderID);
+        if (!rows || rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'Order not found' });
+        }
+        const currentStatus = String(rows[0].orderStatus || 'pending');
+        if (currentStatus === 'accepted') {
+            return res.status(200).json({ success: false, message: 'Order is accepted. Change status to pending to edit.' });
+        }
+
         const result = await orderModel.updateOrderPayment(orderID, paidAmount, adminUid, notes || '');
 
         res.status(200).json({
@@ -250,12 +291,21 @@ const getOrderPayment = async (req, res) => {
             });
         }
 
-        const payments = await orderModel.getOrderPayment(orderID);
+        // Determine visibility based on order status and route context
+        const rows = await orderModel.getOrderById(orderID);
+        if (!rows || rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'Order not found' });
+        }
+        const status = String(rows[0].orderStatus || 'pending');
+        const isUserRoute = String(req.originalUrl || '').includes('/user/');
 
-        res.status(200).json({
-            success: true,
-            data: payments
-        });
+        if (isUserRoute && status !== 'accepted') {
+            // Do not expose payment data to user until accepted
+            return res.status(200).json({ success: true, data: [] });
+        }
+
+        const payments = await orderModel.getOrderPayment(orderID);
+        res.status(200).json({ success: true, data: payments });
     } catch (error) {
         console.error('Get order payment error:', error.message);
         res.status(500).json({
@@ -277,6 +327,16 @@ const updateOrderRemarks = async (req, res) => {
                 success: false,
                 message: 'Order ID is required'
             });
+        }
+
+        // Block edits when order is accepted
+        const rows = await orderModel.getOrderById(orderID);
+        if (!rows || rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'Order not found' });
+        }
+        const currentStatus = String(rows[0].orderStatus || 'pending');
+        if (currentStatus === 'accepted') {
+            return res.status(200).json({ success: false, message: 'Order is accepted. Change status to pending to edit.' });
         }
 
         const updated = await orderModel.updateOrderRemarks(orderID, remarks || '');
@@ -323,6 +383,16 @@ const updatePaymentEntry = async (req, res) => {
             });
         }
 
+        // Block edits when order is accepted
+        const rows = await orderModel.getOrderById(orderID);
+        if (!rows || rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'Order not found' });
+        }
+        const currentStatus = String(rows[0].orderStatus || 'pending');
+        if (currentStatus === 'accepted') {
+            return res.status(200).json({ success: false, message: 'Order is accepted. Change status to pending to edit.' });
+        }
+
         const result = await orderModel.updatePaymentEntry(orderID, paymentId, paidAmount, adminUid, notes || '');
 
         res.status(200).json({
@@ -351,6 +421,16 @@ const deletePaymentEntry = async (req, res) => {
                 success: false,
                 message: 'Order ID and Payment ID are required'
             });
+        }
+
+        // Block edits when order is accepted
+        const rows = await orderModel.getOrderById(orderID);
+        if (!rows || rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'Order not found' });
+        }
+        const currentStatus = String(rows[0].orderStatus || 'pending');
+        if (currentStatus === 'accepted') {
+            return res.status(200).json({ success: false, message: 'Order is accepted. Change status to pending to edit.' });
         }
 
         const result = await orderModel.deletePaymentEntry(orderID, paymentId, adminUid);
