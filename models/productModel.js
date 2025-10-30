@@ -347,10 +347,24 @@ async function bulkCreateProducts(productsData) {
                 const existingProduct = await checkSkuExists(productData.sku);
 
                 if (existingProduct) {
-                    // SKU exists, update only the inventory
-                    const { inventory = 0 } = productData;
+                    // SKU exists, update inventory and optional fields
+                    const { inventory = 0, boxQty, minQty, productPrice } = productData;
 
                     const inventoryResult = await updateInventoryBySku(productData.sku, parseInt(inventory));
+
+                    const updateFields = {};
+                    if (boxQty !== undefined && boxQty !== null && !isNaN(boxQty)) {
+                        updateFields.boxQty = parseInt(boxQty);
+                    }
+                    if (minQty !== undefined && minQty !== null && !isNaN(minQty)) {
+                        updateFields.minQty = parseInt(minQty);
+                    }
+                    if (productPrice !== undefined && productPrice !== null && !isNaN(productPrice)) {
+                        updateFields.productPrice = parseFloat(productPrice);
+                    }
+                    if (Object.keys(updateFields).length > 0) {
+                        await updateProductBySku(productData.sku, updateFields);
+                    }
 
                     results.push({
                         index: i,
@@ -373,20 +387,23 @@ async function bulkCreateProducts(productsData) {
                     productName,
                     productPrice,
                     description = '',
-                    inventory = 0
+                    inventory = 0,
+                    boxQty = null,
+                    minQty = null
                 } = productData;
 
                 // Insert product
                 const [result] = await db.execute(
-                    'INSERT INTO products (productID, productName, productPrice, sku, description, inventory) VALUES (?, ?, ?, ?, ?, ?)',
+                    'INSERT INTO products (productID, productName, productPrice, sku, description, inventory, boxQty, minQty) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
                     [
                         productID,
                         productName,
                         productPrice || 0,
-
                         sku,
                         description,
-                        inventory
+                        inventory,
+                        boxQty !== null && !isNaN(boxQty) ? parseInt(boxQty) : null,
+                        minQty !== null && !isNaN(minQty) ? parseInt(minQty) : null
                     ]
                 );
 

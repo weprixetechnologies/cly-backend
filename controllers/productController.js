@@ -367,7 +367,7 @@ const updateInventoryBySku = async (req, res) => {
         // Process each product in the array
         for (let i = 0; i < Data.length; i++) {
             const product = Data[i];
-            const { sku, inventory, productPrice, productMRP, tax, brand, hsn } = product;
+            const { sku, inventory, productPrice, productMRP, tax, brand, hsn, boxQty, minQty } = product;
 
             try {
                 // Validate required fields for this product
@@ -407,6 +407,13 @@ const updateInventoryBySku = async (req, res) => {
                 // If additional fields are provided, update them too
                 const updateFields = {};
                 if (productPrice !== undefined) updateFields.productPrice = productPrice;
+                // Optional quantities: accept if provided and numeric; ignore if null/undefined
+                if (boxQty !== undefined && boxQty !== null && !isNaN(boxQty)) {
+                    updateFields.boxQty = parseInt(boxQty);
+                }
+                if (minQty !== undefined && minQty !== null && !isNaN(minQty)) {
+                    updateFields.minQty = parseInt(minQty);
+                }
 
 
                 // Update additional fields if any
