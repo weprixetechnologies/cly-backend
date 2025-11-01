@@ -27,7 +27,7 @@ const placeOrder = async (req, res) => {
         }
 
         // Extract order details from request body
-        const { address, paymentMode, couponCode } = req.body;
+        const { address, paymentMode, couponCode, customerComment, themeCategory } = req.body;
 
         // Validate required fields
         if (!address) {
@@ -43,7 +43,9 @@ const placeOrder = async (req, res) => {
             items,
             address,
             paymentMode,
-            couponCode: couponCode || null
+            couponCode: couponCode || null,
+            customerComment: customerComment || null,
+            themeCategory: themeCategory || null
         };
 
         const { orderID } = await orderModel.createOrderFromCart(orderData);
@@ -320,7 +322,7 @@ const getOrderPayment = async (req, res) => {
 const updateOrderRemarks = async (req, res) => {
     try {
         const { orderID } = req.params;
-        const { remarks } = req.body;
+        const { remarks, remarksPhotos } = req.body;
 
         if (!orderID) {
             return res.status(400).json({
@@ -339,7 +341,21 @@ const updateOrderRemarks = async (req, res) => {
             return res.status(200).json({ success: false, message: 'Order is accepted. Change status to pending to edit.' });
         }
 
-        const updated = await orderModel.updateOrderRemarks(orderID, remarks || '');
+        // Parse remarksPhotos if it's an array or string
+        let parsedPhotos = null;
+        if (remarksPhotos !== null && remarksPhotos !== undefined) {
+            if (Array.isArray(remarksPhotos)) {
+                parsedPhotos = remarksPhotos;
+            } else if (typeof remarksPhotos === 'string') {
+                try {
+                    parsedPhotos = JSON.parse(remarksPhotos);
+                } catch (e) {
+                    parsedPhotos = remarksPhotos.length > 0 ? [remarksPhotos] : [];
+                }
+            }
+        }
+
+        const updated = await orderModel.updateOrderRemarks(orderID, remarks || '', parsedPhotos);
 
         if (!updated) {
             return res.status(404).json({

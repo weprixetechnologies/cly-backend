@@ -12,7 +12,7 @@ async function createOrderFromCart(orderData) {
         await connection.beginTransaction();
 
         const orderID = generateOrderID();
-        const { uid, items, address, paymentMode, couponCode } = orderData;
+        const { uid, items, address, paymentMode, couponCode, customerComment, themeCategory } = orderData;
 
         // Consolidate duplicate products (sum quantities) to satisfy unique (orderID, productID)
         const productIdToTotals = new Map();
@@ -63,8 +63,8 @@ async function createOrderFromCart(orderData) {
             const paymentDate = paymentStatus === 'paid' ? new Date() : null;
 
             await connection.execute(
-                'INSERT INTO orders (orderID, productID, productName, boxes, units, requested_units, accepted_units, acceptance_status, featuredImage, uid, orderStatus, addressName, addressPhone, addressLine1, addressLine2, addressCity, addressState, addressPincode, paymentMode, couponCode, order_amount, productPrice, pItemPrice, payment_status, payment_date)\n                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                [orderID, productID, productName, requiredBoxes, units, units, 0, 'pending', featuredImage || '', uid, 'pending', deliveryName, deliveryPhone, address?.addressLine1 || '', address?.addressLine2 || '', address?.city || '', address?.state || '', address?.pincode || '', paymentMode || 'COD', couponCode || '', totalOrderAmount, productPrice, productPrice, paymentStatus, paymentDate]
+                'INSERT INTO orders (orderID, productID, productName, boxes, units, requested_units, accepted_units, acceptance_status, featuredImage, uid, orderStatus, addressName, addressPhone, addressLine1, addressLine2, addressCity, addressState, addressPincode, paymentMode, couponCode, order_amount, productPrice, pItemPrice, payment_status, payment_date, customer_comment, themeCategory)\n                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                [orderID, productID, productName, requiredBoxes, units, units, 0, 'pending', featuredImage || '', uid, 'pending', deliveryName, deliveryPhone, address?.addressLine1 || '', address?.addressLine2 || '', address?.city || '', address?.state || '', address?.pincode || '', paymentMode || 'COD', couponCode || '', totalOrderAmount, productPrice, productPrice, paymentStatus, paymentDate, customerComment || null, themeCategory || null]
             );
         }
 
@@ -239,12 +239,20 @@ async function updateOrderAcceptance(orderID, productID, acceptedUnits, adminNot
 }
 
 // Update order remarks
-async function updateOrderRemarks(orderID, remarks) {
+async function updateOrderRemarks(orderID, remarks, remarksPhotos = null) {
     try {
-        const [result] = await db.execute(
-            'UPDATE orders SET remarks = ? WHERE orderID = ?',
-            [remarks, orderID]
-        );
+        let query = 'UPDATE orders SET remarks = ?';
+        let params = [remarks];
+
+        if (remarksPhotos !== null) {
+            query += ', remarks_photos = ?';
+            params.push(JSON.stringify(remarksPhotos));
+        }
+
+        query += ' WHERE orderID = ?';
+        params.push(orderID);
+
+        const [result] = await db.execute(query, params);
         return result.affectedRows > 0;
     } catch (error) {
         throw new Error(`Error updating order remarks: ${error.message}`);

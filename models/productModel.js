@@ -55,13 +55,14 @@ async function createProduct(productData) {
             minQty,
             categoryID,
             categoryName,
+            themeCategory,
             featuredImages,
             galleryImages,
             inventory
         } = productData;
 
         const [result] = await db.execute(
-            'INSERT INTO products (\n                productID, productName, productPrice, sku, description, \n                boxQty, minQty, categoryID, categoryName, \n                featuredImages, galleryImages, inventory\n            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            'INSERT INTO products (\n                productID, productName, productPrice, sku, description, \n                boxQty, minQty, categoryID, categoryName, themeCategory, \n                featuredImages, galleryImages, inventory\n            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
             [
                 productID,
                 productName,
@@ -72,6 +73,7 @@ async function createProduct(productData) {
                 minQty,
                 categoryID,
                 categoryName,
+                themeCategory || null,
                 featuredImages,
                 JSON.stringify(galleryImages),
                 inventory
@@ -89,19 +91,34 @@ async function createProduct(productData) {
 }
 
 // Get all products with pagination
-async function getAllProducts(page = 1, limit = 10, search = '') {
+async function getAllProducts(page = 1, limit = 10, search = '', categoryID = '', minPrice = null, maxPrice = null) {
     try {
         // Ensure page and limit are integers
         const pageNum = parseInt(page) || 1;
         const limitNum = parseInt(limit) || 10;
         const offset = (pageNum - 1) * limitNum;
 
-        let query = 'SELECT * FROM products WHERE 1=1';
+        let query = 'SELECT * FROM products WHERE status = "active"';
         let params = [];
 
         if (search) {
             query += ` AND (productName LIKE ? OR sku LIKE ? OR categoryName LIKE ?)`;
             params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+        }
+
+        if (categoryID) {
+            query += ` AND categoryID = ?`;
+            params.push(categoryID);
+        }
+
+        if (minPrice !== null && minPrice !== undefined && minPrice !== '') {
+            query += ` AND productPrice >= ?`;
+            params.push(parseFloat(minPrice));
+        }
+
+        if (maxPrice !== null && maxPrice !== undefined && maxPrice !== '') {
+            query += ` AND productPrice <= ?`;
+            params.push(parseFloat(maxPrice));
         }
 
         query += ` ORDER BY createdAt DESC LIMIT ? OFFSET ?`;
@@ -110,12 +127,27 @@ async function getAllProducts(page = 1, limit = 10, search = '') {
         const [rows] = await db.execute(query, params);
 
         // Get total count for pagination
-        let countQuery = 'SELECT COUNT(*) as total FROM products WHERE 1=1';
+        let countQuery = 'SELECT COUNT(*) as total FROM products WHERE status = "active"';
         let countParams = [];
 
         if (search) {
             countQuery += ` AND (productName LIKE ? OR sku LIKE ? OR categoryName LIKE ?)`;
             countParams.push(`%${search}%`, `%${search}%`, `%${search}%`);
+        }
+
+        if (categoryID) {
+            countQuery += ` AND categoryID = ?`;
+            countParams.push(categoryID);
+        }
+
+        if (minPrice !== null && minPrice !== undefined && minPrice !== '') {
+            countQuery += ` AND productPrice >= ?`;
+            countParams.push(parseFloat(minPrice));
+        }
+
+        if (maxPrice !== null && maxPrice !== undefined && maxPrice !== '') {
+            countQuery += ` AND productPrice <= ?`;
+            countParams.push(parseFloat(maxPrice));
         }
 
         const [countResult] = await db.execute(countQuery, countParams);
@@ -160,6 +192,7 @@ async function updateProduct(productID, productData) {
             minQty,
             categoryID,
             categoryName,
+            themeCategory,
             featuredImages,
             galleryImages,
             inventory,
@@ -167,7 +200,7 @@ async function updateProduct(productID, productData) {
         } = productData;
 
         const [result] = await db.execute(
-            'UPDATE products SET \n                productName = ?, productPrice = ?, sku = ?, description = ?,\n                boxQty = ?, minQty = ?, categoryID = ?, categoryName = ?,\n                featuredImages = ?, galleryImages = ?, inventory = ?, status = ?,\n                updatedAt = CURRENT_TIMESTAMP\n            WHERE productID = ?',
+            'UPDATE products SET \n                productName = ?, productPrice = ?, sku = ?, description = ?,\n                boxQty = ?, minQty = ?, categoryID = ?, categoryName = ?, themeCategory = ?,\n                featuredImages = ?, galleryImages = ?, inventory = ?, status = ?,\n                updatedAt = CURRENT_TIMESTAMP\n            WHERE productID = ?',
             [
                 productName,
                 productPrice,
@@ -177,6 +210,7 @@ async function updateProduct(productID, productData) {
                 minQty,
                 categoryID,
                 categoryName,
+                themeCategory || null,
                 featuredImages,
                 JSON.stringify(galleryImages),
                 inventory,
@@ -347,33 +381,56 @@ async function bulkCreateProducts(productsData) {
                 const existingProduct = await checkSkuExists(productData.sku);
 
                 if (existingProduct) {
-                    // SKU exists, update inventory and optional fields
-                    const { inventory = 0, boxQty, minQty, productPrice } = productData;
+                    // SKU exists, override ALL data with request data
+                    // The controller has already normalized the data (boxQty, minQty, themeCategory)
+                    const {
+                        productName,
+                        productPrice,
+                        description = '',
+                        inventory = 0,
+                        boxQty = 1,
+                        minQty = 1,
+                        categoryID = null,
+                        categoryName = null,
+                        themeCategory = null,
+                        featuredImages = '',
+                        galleryImages = []
+                    } = productData;
 
-                    const inventoryResult = await updateInventoryBySku(productData.sku, parseInt(inventory));
+                    // Prepare all update fields - override with request data
+                    const updateFields = {
+                        productName: productName || '',
+                        productPrice: (productPrice !== undefined && productPrice !== null && !isNaN(productPrice)) ? parseFloat(productPrice) : 0,
+                        description: description || '',
+                        inventory: (inventory !== undefined && inventory !== null && !isNaN(inventory)) ? parseInt(inventory) : 0,
+                        boxQty: (boxQty !== undefined && boxQty !== null && !isNaN(boxQty) && parseInt(boxQty) >= 1) ? parseInt(boxQty) : 1,
+                        minQty: (minQty !== undefined && minQty !== null && !isNaN(minQty) && parseInt(minQty) >= 1) ? parseInt(minQty) : 1,
+                        categoryID: categoryID || null,
+                        categoryName: categoryName || null,
+                        themeCategory: (themeCategory && themeCategory.trim() !== '') ? themeCategory.trim() : null,
+                        featuredImages: featuredImages || ''
+                    };
 
-                    const updateFields = {};
-                    if (boxQty !== undefined && boxQty !== null && !isNaN(boxQty)) {
-                        updateFields.boxQty = parseInt(boxQty);
+                    // Handle galleryImages (array should be JSON stringified)
+                    if (Array.isArray(galleryImages)) {
+                        updateFields.galleryImages = JSON.stringify(galleryImages);
+                    } else if (typeof galleryImages === 'string') {
+                        updateFields.galleryImages = galleryImages;
+                    } else {
+                        updateFields.galleryImages = JSON.stringify([]);
                     }
-                    if (minQty !== undefined && minQty !== null && !isNaN(minQty)) {
-                        updateFields.minQty = parseInt(minQty);
-                    }
-                    if (productPrice !== undefined && productPrice !== null && !isNaN(productPrice)) {
-                        updateFields.productPrice = parseFloat(productPrice);
-                    }
-                    if (Object.keys(updateFields).length > 0) {
-                        await updateProductBySku(productData.sku, updateFields);
-                    }
+
+                    // Update all fields - complete override
+                    await updateProductBySku(productData.sku, updateFields);
 
                     results.push({
                         index: i,
                         sku: productData.sku,
                         productID: existingProduct.productID,
-                        productName: existingProduct.productName,
+                        productName: updateFields.productName,
                         oldInventory: existingProduct.inventory,
-                        newInventory: parseInt(inventory),
-                        status: 'updated_inventory'
+                        newInventory: updateFields.inventory,
+                        status: 'updated'
                     });
                     continue;
                 }
@@ -382,19 +439,25 @@ async function bulkCreateProducts(productsData) {
                 const productID = await generateUniqueProductID();
 
                 // Map incoming data to database columns
+                // boxQty and minQty should already be normalized in controller (default to 1)
                 const {
                     sku,
                     productName,
                     productPrice,
                     description = '',
                     inventory = 0,
-                    boxQty = null,
-                    minQty = null
+                    boxQty = 1,
+                    minQty = 1,
+                    themeCategory = null
                 } = productData;
+
+                // Ensure boxQty and minQty are at least 1
+                const finalBoxQty = (boxQty !== null && boxQty !== undefined && !isNaN(boxQty) && parseInt(boxQty) >= 1) ? parseInt(boxQty) : 1;
+                const finalMinQty = (minQty !== null && minQty !== undefined && !isNaN(minQty) && parseInt(minQty) >= 1) ? parseInt(minQty) : 1;
 
                 // Insert product
                 const [result] = await db.execute(
-                    'INSERT INTO products (productID, productName, productPrice, sku, description, inventory, boxQty, minQty) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                    'INSERT INTO products (productID, productName, productPrice, sku, description, inventory, boxQty, minQty, themeCategory) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
                     [
                         productID,
                         productName,
@@ -402,8 +465,9 @@ async function bulkCreateProducts(productsData) {
                         sku,
                         description,
                         inventory,
-                        boxQty !== null && !isNaN(boxQty) ? parseInt(boxQty) : null,
-                        minQty !== null && !isNaN(minQty) ? parseInt(minQty) : null
+                        finalBoxQty,
+                        finalMinQty,
+                        themeCategory || null
                     ]
                 );
 

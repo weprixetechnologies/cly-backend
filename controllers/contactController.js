@@ -86,7 +86,7 @@ const createContactDetail = async (req, res) => {
             });
         }
 
-        const validTypes = ['email', 'phone', 'address', 'social_media', 'other'];
+        const validTypes = ['email', 'phone', 'address', 'social_media', 'other', 'headquarter', 'headquarter_address', 'headquarter_phone'];
         if (!validTypes.includes(type)) {
             return res.status(400).json({
                 success: false,

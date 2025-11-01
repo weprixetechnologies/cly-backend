@@ -12,6 +12,7 @@ const addProduct = async (req, res) => {
             minQty,
             categoryID,
             categoryName,
+            themeCategory,
             featuredImages,
             galleryImages,
             inventory
@@ -53,6 +54,7 @@ const addProduct = async (req, res) => {
             minQty: parseInt(minQty) || 1,
             categoryID: categoryID || null,
             categoryName: categoryName || null,
+            themeCategory: themeCategory || null,
             featuredImages: featuredImages || '',
             galleryImages: galleryImages || [],
             inventory: parseInt(inventory) || 0
@@ -84,8 +86,11 @@ const getAllProducts = async (req, res) => {
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
         const search = req.query.search || '';
+        const categoryID = req.query.categoryID || '';
+        const minPrice = req.query.minPrice || null;
+        const maxPrice = req.query.maxPrice || null;
 
-        const result = await productModel.getAllProducts(page, limit, search);
+        const result = await productModel.getAllProducts(page, limit, search, categoryID, minPrice, maxPrice);
 
         res.status(200).json({
             success: true,
@@ -153,6 +158,7 @@ const updateProduct = async (req, res) => {
             minQty,
             categoryID,
             categoryName,
+            themeCategory,
             featuredImages,
             galleryImages,
             inventory,
@@ -193,6 +199,7 @@ const updateProduct = async (req, res) => {
             minQty: parseInt(minQty) || 1,
             categoryID: categoryID || null,
             categoryName: categoryName || null,
+            themeCategory: themeCategory || null,
             featuredImages: featuredImages || '',
             galleryImages: galleryImages || [],
             inventory: parseInt(inventory) || 0,
@@ -361,109 +368,64 @@ const updateInventoryBySku = async (req, res) => {
             });
         }
 
-        const results = [];
-        const errors = [];
-
-        // Process each product in the array
+        // Validate each product in the array first
         for (let i = 0; i < Data.length; i++) {
             const product = Data[i];
-            const { sku, inventory, productPrice, productMRP, tax, brand, hsn, boxQty, minQty } = product;
 
-            try {
-                // Validate required fields for this product
-                if (!sku || inventory === undefined) {
-                    errors.push({
-                        index: i,
-                        sku: sku || 'undefined',
-                        error: 'SKU and inventory are required'
-                    });
-                    continue;
-                }
-
-                // Check if SKU exists
-                const existingProduct = await productModel.checkSkuExists(sku);
-                if (!existingProduct) {
-                    errors.push({
-                        index: i,
-                        sku,
-                        error: 'Product with SKU not found',
-                        found: false
-                    });
-                    continue;
-                }
-
-                // Update inventory
-                const inventoryResult = await productModel.updateInventoryBySku(sku, parseInt(inventory));
-
-                if (inventoryResult.affectedRows === 0) {
-                    errors.push({
-                        index: i,
-                        sku,
-                        error: 'No changes made to the inventory'
-                    });
-                    continue;
-                }
-
-                // If additional fields are provided, update them too
-                const updateFields = {};
-                if (productPrice !== undefined) updateFields.productPrice = productPrice;
-                // Optional quantities: accept if provided and numeric; ignore if null/undefined
-                if (boxQty !== undefined && boxQty !== null && !isNaN(boxQty)) {
-                    updateFields.boxQty = parseInt(boxQty);
-                }
-                if (minQty !== undefined && minQty !== null && !isNaN(minQty)) {
-                    updateFields.minQty = parseInt(minQty);
-                }
-
-
-                // Update additional fields if any
-                if (Object.keys(updateFields).length > 0) {
-                    await productModel.updateProductBySku(sku, updateFields);
-                }
-
-                // Add to successful results
-                results.push({
-                    index: i,
-                    sku,
-                    productName: existingProduct.productName,
-                    oldInventory: existingProduct.inventory,
-                    newInventory: parseInt(inventory),
-                    updated: true
-                });
-
-            } catch (productError) {
-                errors.push({
-                    index: i,
-                    sku: sku || 'undefined',
-                    error: `Failed to process: ${productError.message}`
+            if (!product.sku) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Product at index ${i} is missing required field: sku`
                 });
             }
         }
+
+        // Normalize product data: map BoxQty/MOQ and set defaults
+        const normalizedData = Data.map((product) => {
+            // Map BoxQty to boxQty and MOQ to minQty
+            // Support both uppercase (BoxQty, MOQ) and lowercase (boxQty, minQty) formats
+            const boxQty = product.BoxQty !== undefined ? product.BoxQty : (product.boxQty !== undefined ? product.boxQty : null);
+            const minQty = product.MOQ !== undefined ? product.MOQ : (product.minQty !== undefined ? product.minQty : null);
+
+            // Set default to 1 if empty or null
+            const normalizedBoxQty = (boxQty === null || boxQty === undefined || boxQty === '' || isNaN(boxQty)) ? 1 : parseInt(boxQty);
+            const normalizedMinQty = (minQty === null || minQty === undefined || minQty === '' || isNaN(minQty)) ? 1 : parseInt(minQty);
+
+            // Map categoryName to themeCategory (handle empty string as null)
+            const categoryNameValue = product.categoryName && product.categoryName.trim() !== '' ? product.categoryName : null;
+            const themeCategoryValue = product.themeCategory && product.themeCategory.trim() !== '' ? product.themeCategory : null;
+            const themeCategory = categoryNameValue || themeCategoryValue || null;
+
+            // Create normalized product object
+            return {
+                ...product,
+                boxQty: normalizedBoxQty,
+                minQty: normalizedMinQty,
+                themeCategory: themeCategory || null
+            };
+        });
+
+        // Process bulk update/create - same logic as bulk-add
+        const result = await productModel.bulkCreateProducts(normalizedData);
 
         // Prepare response
         const response = {
             success: true,
-            message: `Processed ${Data.length} products`,
-            data: {
-                total: Data.length,
-                successful: results.length,
-                failed: errors.length,
-                results,
-                errors
-            }
+            message: `Bulk product update/create completed`,
+            data: result
         };
 
         // If all products failed, return 400
-        if (results.length === 0) {
+        if (result.successful === 0) {
             return res.status(400).json({
                 success: false,
-                message: 'All products failed to update',
-                data: response.data
+                message: 'All products failed to process',
+                data: result
             });
         }
 
         // If some products failed, return 207 (Multi-Status)
-        if (errors.length > 0) {
+        if (result.failed > 0) {
             return res.status(207).json(response);
         }
 
@@ -474,7 +436,7 @@ const updateInventoryBySku = async (req, res) => {
         console.error('Error updating inventory by SKU:', error);
         res.status(500).json({
             success: false,
-            message: 'Failed to update inventory',
+            message: 'Failed to update/create products',
             error: error.message
         });
     }
@@ -500,7 +462,7 @@ const bulkAddProducts = async (req, res) => {
             });
         }
 
-        // Validate each product in the array
+        // Validate each product in the array first
         for (let i = 0; i < Data.length; i++) {
             const product = Data[i];
 
@@ -519,8 +481,33 @@ const bulkAddProducts = async (req, res) => {
             }
         }
 
+        // Normalize product data: map BoxQty/MOQ and set defaults
+        const normalizedData = Data.map((product) => {
+            // Map BoxQty to boxQty and MOQ to minQty
+            // Support both uppercase (BoxQty, MOQ) and lowercase (boxQty, minQty) formats
+            const boxQty = product.BoxQty !== undefined ? product.BoxQty : (product.boxQty !== undefined ? product.boxQty : null);
+            const minQty = product.MOQ !== undefined ? product.MOQ : (product.minQty !== undefined ? product.minQty : null);
+
+            // Set default to 1 if empty or null
+            const normalizedBoxQty = (boxQty === null || boxQty === undefined || boxQty === '' || isNaN(boxQty)) ? 1 : parseInt(boxQty);
+            const normalizedMinQty = (minQty === null || minQty === undefined || minQty === '' || isNaN(minQty)) ? 1 : parseInt(minQty);
+
+            // Map categoryName to themeCategory (handle empty string as null)
+            const categoryNameValue = product.categoryName && product.categoryName.trim() !== '' ? product.categoryName : null;
+            const themeCategoryValue = product.themeCategory && product.themeCategory.trim() !== '' ? product.themeCategory : null;
+            const themeCategory = categoryNameValue || themeCategoryValue || null;
+
+            // Create normalized product object
+            return {
+                ...product,
+                boxQty: normalizedBoxQty,
+                minQty: normalizedMinQty,
+                themeCategory: themeCategory || null
+            };
+        });
+
         // Process bulk creation
-        const result = await productModel.bulkCreateProducts(Data);
+        const result = await productModel.bulkCreateProducts(normalizedData);
 
         // Prepare response
         const response = {
