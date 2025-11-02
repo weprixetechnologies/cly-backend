@@ -444,6 +444,8 @@ const updateInventoryBySku = async (req, res) => {
 
 // Bulk add products (for supplier integration)
 const bulkAddProducts = async (req, res) => {
+    console.log(req.body);
+
     try {
         const { supplier_token, Data } = req.body;
 
