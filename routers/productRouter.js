@@ -10,7 +10,7 @@ const router = express.Router();
 // Product routes
 router.post('/add', productController.addProduct);
 router.post('/bulk-add', productController.bulkAddProducts);
-router.post('/update-inventory', productController.updateInventoryBySku);
+router.post('/update-inventory', productController.bulkAddProducts);
 router.get('/list', productController.getAllProducts);
 router.get('/by-category/:categoryID', productController.getProductsByCategory);
 router.get('/:productID', productController.getProductById);
