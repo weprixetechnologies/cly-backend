@@ -350,6 +350,7 @@ const createCategory = async (req, res) => {
 
 // Update inventory by SKU
 const updateInventoryBySku = async (req, res) => {
+    console.log(req.body);
     try {
         const { supplier_token, Data } = req.body;
 
