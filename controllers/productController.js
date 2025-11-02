@@ -369,20 +369,33 @@ const updateInventoryBySku = async (req, res) => {
             });
         }
 
-        // Validate each product in the array first
-        for (let i = 0; i < Data.length; i++) {
-            const product = Data[i];
-
-            if (!product.sku) {
-                return res.status(400).json({
-                    success: false,
-                    message: `Product at index ${i} is missing required field: sku`
+        // Filter out items without SKU and track skipped items
+        const validProducts = [];
+        const skippedItems = [];
+        
+        Data.forEach((product, index) => {
+            if (!product.sku || product.sku.trim() === '') {
+                skippedItems.push({
+                    index,
+                    reason: 'Missing or empty SKU',
+                    data: product
                 });
+            } else {
+                validProducts.push(product);
             }
+        });
+
+        // Check if we have any valid products after filtering
+        if (validProducts.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'All products are missing required field: sku',
+                skipped: skippedItems.length
+            });
         }
 
         // Normalize product data: map BoxQty/MOQ and set defaults
-        const normalizedData = Data.map((product) => {
+        const normalizedData = validProducts.map((product) => {
             // Map BoxQty to boxQty and MOQ to minQty
             // Support both uppercase (BoxQty, MOQ) and lowercase (boxQty, minQty) formats
             const boxQty = product.BoxQty !== undefined ? product.BoxQty : (product.boxQty !== undefined ? product.boxQty : null);
@@ -409,11 +422,18 @@ const updateInventoryBySku = async (req, res) => {
         // Process bulk update/create - same logic as bulk-add
         const result = await productModel.bulkCreateProducts(normalizedData);
 
-        // Prepare response
+        // Prepare response with skipped items info
         const response = {
             success: true,
             message: `Bulk product update/create completed`,
-            data: result
+            data: {
+                ...result,
+                skipped: skippedItems.length,
+                skippedItems: skippedItems.length > 0 ? skippedItems.map(item => ({
+                    index: item.index,
+                    reason: item.reason
+                })) : []
+            }
         };
 
         // If all products failed, return 400
@@ -465,27 +485,44 @@ const bulkAddProducts = async (req, res) => {
             });
         }
 
-        // Validate each product in the array first
-        for (let i = 0; i < Data.length; i++) {
-            const product = Data[i];
-
-            if (!product.sku) {
-                return res.status(400).json({
-                    success: false,
-                    message: `Product at index ${i} is missing required field: sku`
+        // Filter out items without SKU and track skipped items
+        const validProducts = [];
+        const skippedItems = [];
+        
+        Data.forEach((product, index) => {
+            if (!product.sku || product.sku.trim() === '') {
+                skippedItems.push({
+                    index,
+                    reason: 'Missing or empty SKU',
+                    data: product
                 });
+            } else {
+                validProducts.push(product);
             }
+        });
 
+        // Check if we have any valid products after filtering
+        if (validProducts.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'All products are missing required field: sku',
+                skipped: skippedItems.length
+            });
+        }
+
+        // Validate remaining products for other required fields
+        for (let i = 0; i < validProducts.length; i++) {
+            const product = validProducts[i];
             if (!product.productName) {
                 return res.status(400).json({
                     success: false,
-                    message: `Product at index ${i} is missing required field: productName`
+                    message: `Product at index ${i} (after filtering) is missing required field: productName`
                 });
             }
         }
 
         // Normalize product data: map BoxQty/MOQ and set defaults
-        const normalizedData = Data.map((product) => {
+        const normalizedData = validProducts.map((product) => {
             // Map BoxQty to boxQty and MOQ to minQty
             // Support both uppercase (BoxQty, MOQ) and lowercase (boxQty, minQty) formats
             const boxQty = product.BoxQty !== undefined ? product.BoxQty : (product.boxQty !== undefined ? product.boxQty : null);
@@ -512,11 +549,18 @@ const bulkAddProducts = async (req, res) => {
         // Process bulk creation
         const result = await productModel.bulkCreateProducts(normalizedData);
 
-        // Prepare response
+        // Prepare response with skipped items info
         const response = {
             success: true,
             message: `Bulk product creation completed`,
-            data: result
+            data: {
+                ...result,
+                skipped: skippedItems.length,
+                skippedItems: skippedItems.length > 0 ? skippedItems.map(item => ({
+                    index: item.index,
+                    reason: item.reason
+                })) : []
+            }
         };
 
         // If all products failed, return 400
