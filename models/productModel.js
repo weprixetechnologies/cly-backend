@@ -91,7 +91,7 @@ async function createProduct(productData) {
 }
 
 // Get all products with pagination
-async function getAllProducts(page = 1, limit = 10, search = '', categoryID = '', minPrice = null, maxPrice = null) {
+async function getAllProducts(page = 1, limit = 10, search = '', categoryID = '', minPrice = null, maxPrice = null, outOfStock = true) {
     try {
         // Ensure page and limit are integers
         const pageNum = parseInt(page) || 1;
@@ -121,6 +121,11 @@ async function getAllProducts(page = 1, limit = 10, search = '', categoryID = ''
             params.push(parseFloat(maxPrice));
         }
 
+        // Filter out-of-stock products if outOfStock is false
+        if (outOfStock === false || outOfStock === 'false') {
+            query += ` AND inventory > 0`;
+        }
+
         query += ` ORDER BY createdAt DESC LIMIT ? OFFSET ?`;
         params.push(limitNum, offset);
 
@@ -148,6 +153,11 @@ async function getAllProducts(page = 1, limit = 10, search = '', categoryID = ''
         if (maxPrice !== null && maxPrice !== undefined && maxPrice !== '') {
             countQuery += ` AND productPrice <= ?`;
             countParams.push(parseFloat(maxPrice));
+        }
+
+        // Filter out-of-stock products in count query if outOfStock is false
+        if (outOfStock === false || outOfStock === 'false') {
+            countQuery += ` AND inventory > 0`;
         }
 
         const [countResult] = await db.execute(countQuery, countParams);

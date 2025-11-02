@@ -89,8 +89,11 @@ const getAllProducts = async (req, res) => {
         const categoryID = req.query.categoryID || '';
         const minPrice = req.query.minPrice || null;
         const maxPrice = req.query.maxPrice || null;
+        // Parse outOfStock - default to true (include all products)
+        // If not provided or explicitly 'true', include all products. Only exclude when explicitly 'false'
+        const outOfStock = req.query.outOfStock === undefined || req.query.outOfStock === 'true' || req.query.outOfStock === true;
 
-        const result = await productModel.getAllProducts(page, limit, search, categoryID, minPrice, maxPrice);
+        const result = await productModel.getAllProducts(page, limit, search, categoryID, minPrice, maxPrice, outOfStock);
 
         res.status(200).json({
             success: true,
