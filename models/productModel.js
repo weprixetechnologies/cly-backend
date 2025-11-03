@@ -190,6 +190,17 @@ async function getProductById(productID) {
     }
 }
 
+// Delete all products (dangerous operation)
+async function deleteAllProducts() {
+    try {
+        // Hard delete all products. Foreign keys should cascade as per schema.
+        const [result] = await db.execute('DELETE FROM products');
+        return { affectedRows: result.affectedRows };
+    } catch (error) {
+        throw new Error(`Error deleting all products: ${error.message}`);
+    }
+}
+
 // Update product
 async function updateProduct(productID, productData) {
     try {
@@ -514,6 +525,7 @@ async function bulkCreateProducts(productsData) {
 module.exports = {
     createProduct,
     getAllProducts,
+    deleteAllProducts,
     getProductById,
     updateProduct,
     deleteProduct,

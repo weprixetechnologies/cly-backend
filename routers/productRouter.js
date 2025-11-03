@@ -11,6 +11,8 @@ const router = express.Router();
 router.post('/add', productController.addProduct);
 router.post('/bulk-add', productController.bulkAddProducts);
 router.post('/update-inventory', productController.bulkAddProducts);
+// Danger: delete all products (soft-delete)
+router.delete('/all', productController.deleteAllProducts);
 router.get('/list', productController.getAllProducts);
 router.get('/by-category/:categoryID', productController.getProductsByCategory);
 router.get('/:productID', productController.getProductById);

@@ -264,6 +264,25 @@ const deleteProduct = async (req, res) => {
     }
 };
 
+// Delete all products (hard delete)
+const deleteAllProducts = async (req, res) => {
+    try {
+        const result = await productModel.deleteAllProducts();
+        res.status(200).json({
+            success: true,
+            message: 'All products deleted',
+            affected: result.affectedRows
+        });
+    } catch (error) {
+        console.error('Error deleting all products:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to delete all products',
+            error: error.message
+        });
+    }
+};
+
 // Get products by category
 const getProductsByCategory = async (req, res) => {
     try {
@@ -603,5 +622,6 @@ module.exports = {
     getCategories,
     createCategory,
     updateInventoryBySku,
-    bulkAddProducts
+    bulkAddProducts,
+    deleteAllProducts
 };
