@@ -196,7 +196,7 @@ Authorization: Bearer <admin_token> (if authentication is enabled)
 
 #### cURL - Minimal Request
 ```bash
-curl -X POST http://72.60.219.181:3300/api/products/add \
+curl -X POST https://api.cursiveletters.in/api/products/add \
   -H "Content-Type: application/json" \
   -d '{
     "productName": "Sample Product",
@@ -206,7 +206,7 @@ curl -X POST http://72.60.219.181:3300/api/products/add \
 
 #### cURL - Complete Request
 ```bash
-curl -X POST http://72.60.219.181:3300/api/products/add \
+curl -X POST https://api.cursiveletters.in/api/products/add \
   -H "Content-Type: application/json" \
   -d '{
     "productName": "Premium Wireless Headphones",
@@ -245,7 +245,7 @@ const productData = {
     inventory: 50
 };
 
-const response = await fetch('http://72.60.219.181:3300/api/products/add', {
+const response = await fetch('https://api.cursiveletters.in/api/products/add', {
     method: 'POST',
     headers: {
         'Content-Type': 'application/json',
