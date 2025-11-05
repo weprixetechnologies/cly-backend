@@ -1,4 +1,5 @@
 const categoryService = require('../services/categoryService');
+const productModel = require('../models/productModel');
 
 // Get all categories
 const getAllCategories = async (req, res) => {
@@ -201,11 +202,40 @@ const updateCategoryProductCount = async (req, res) => {
     }
 };
 
+// Remove category assignment from all products in this category
+const removeCategoryFromProducts = async (req, res) => {
+    try {
+        const { categoryID } = req.params;
+
+        // Ensure category exists
+        const category = await categoryService.getCategoryById(categoryID);
+        if (!category) {
+            return res.status(404).json({ success: false, message: 'Category not found' });
+        }
+
+        // Clear category references from products
+        const result = await productModel.clearCategoryFromProducts(categoryID);
+
+        // Set productCount to 0
+        await categoryService.updateCategory(categoryID, { productCount: 0 });
+
+        res.status(200).json({
+            success: true,
+            message: 'Removed category from products',
+            affected: result.affectedRows
+        });
+    } catch (error) {
+        console.error('Error removing category from products:', error);
+        res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+};
+
 module.exports = {
     getAllCategories,
     getCategoryById,
     createCategory,
     updateCategory,
     deleteCategory,
-    updateCategoryProductCount
+    updateCategoryProductCount,
+    removeCategoryFromProducts
 };

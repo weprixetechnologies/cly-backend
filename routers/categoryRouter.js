@@ -19,5 +19,6 @@ router.delete('/:categoryID', categoryController.deleteCategory);
 
 // Update category product count
 router.patch('/:categoryID/product-count', categoryController.updateCategoryProductCount);
+router.patch('/:categoryID/remove-from-products', categoryController.removeCategoryFromProducts);
 
 module.exports = router;

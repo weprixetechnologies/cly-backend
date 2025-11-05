@@ -1,4 +1,5 @@
 const productModel = require('../models/productModel');
+const categoryService = require('../services/categoryService');
 
 // Add new product
 const addProduct = async (req, res) => {
@@ -61,6 +62,15 @@ const addProduct = async (req, res) => {
         };
 
         const result = await productModel.createProduct(productData);
+
+        // Increment category count if categoryID provided
+        if (productData.categoryID) {
+            try {
+                await categoryService.updateCategoryProductCount(productData.categoryID, true);
+            } catch (e) {
+                console.warn('Failed to increment category count on product create:', e.message);
+            }
+        }
 
         res.status(201).json({
             success: true,
@@ -177,25 +187,28 @@ const updateProduct = async (req, res) => {
             });
         }
 
-        // Validate required fields
-        if (!productName || !productPrice || !sku) {
+        // Validate required fields (allow updates without forcing price; UI sends it but may be 0)
+        if (!productName || !sku) {
             return res.status(400).json({
                 success: false,
-                message: 'Product name, price, and SKU are required'
+                message: 'Product name and SKU are required'
             });
         }
 
-        // Validate price
-        if (isNaN(productPrice) || productPrice <= 0) {
-            return res.status(400).json({
-                success: false,
-                message: 'Product price must be a valid positive number'
-            });
+        // Validate price only if provided; allow 0
+        if (productPrice !== undefined && productPrice !== null && productPrice !== '') {
+            const priceNum = parseFloat(productPrice);
+            if (isNaN(priceNum) || priceNum < 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Product price must be a valid non-negative number'
+                });
+            }
         }
 
         const productData = {
             productName,
-            productPrice: parseFloat(productPrice),
+            productPrice: productPrice !== undefined && productPrice !== null && productPrice !== '' ? parseFloat(productPrice) : 0,
             sku,
             description: description || '',
             boxQty: parseInt(boxQty) || 0,
@@ -209,7 +222,20 @@ const updateProduct = async (req, res) => {
             status: status || 'active'
         };
 
+        const oldCategoryID = existingProduct.categoryID || null;
+        const newCategoryID = productData.categoryID || null;
+
         const result = await productModel.updateProduct(productID, productData);
+
+        // Adjust category counts when category changes
+        if (oldCategoryID !== newCategoryID) {
+            try {
+                if (oldCategoryID) await categoryService.updateCategoryProductCount(oldCategoryID, false);
+                if (newCategoryID) await categoryService.updateCategoryProductCount(newCategoryID, true);
+            } catch (e) {
+                console.warn('Failed to adjust category counts on product update:', e.message);
+            }
+        }
 
         if (result.affectedRows === 0) {
             return res.status(400).json({
@@ -247,7 +273,17 @@ const deleteProduct = async (req, res) => {
             });
         }
 
+        const existingCategoryID = existingProduct.categoryID || null;
+
         const result = await productModel.deleteProduct(productID);
+
+        if (existingCategoryID) {
+            try {
+                await categoryService.updateCategoryProductCount(existingCategoryID, false);
+            } catch (e) {
+                console.warn('Failed to decrement category count on delete:', e.message);
+            }
+        }
 
         res.status(200).json({
             success: true,

@@ -389,6 +389,19 @@ async function updateProductBySku(sku, updateFields) {
     }
 }
 
+// Remove category assignment from all products in a category
+async function clearCategoryFromProducts(categoryID) {
+    try {
+        const [result] = await db.execute(
+            `UPDATE products SET categoryID = NULL, categoryName = NULL, updatedAt = CURRENT_TIMESTAMP WHERE categoryID = ?`,
+            [categoryID]
+        );
+        return { affectedRows: result.affectedRows };
+    } catch (error) {
+        throw new Error(`Error clearing category from products: ${error.message}`);
+    }
+}
+
 // Bulk create products (for supplier integration)
 async function bulkCreateProducts(productsData) {
     try {
@@ -535,5 +548,6 @@ module.exports = {
     updateInventoryBySku,
     updateProductBySku,
     checkSkuExists,
-    bulkCreateProducts
+    bulkCreateProducts,
+    clearCategoryFromProducts
 };
