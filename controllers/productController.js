@@ -413,6 +413,21 @@ const updateInventoryBySku = async (req, res) => {
     try {
         const { supplier_token, Data } = req.body;
 
+        // Write Data to datalog.txt for audit/debug
+        const fs = require('fs');
+        const path = require('path');
+        const LOG_PATH = path.join(__dirname, '..', 'datalog.txt');
+        try {
+            fs.appendFileSync(
+                LOG_PATH,
+                `\n[${new Date().toISOString()}] Data: ${JSON.stringify(Data, null, 2)}\n`,
+                { encoding: 'utf8' }
+            );
+        } catch (err) {
+            // Swallow file write errors to not interrupt the flow
+        }
+        
+
         // Validate request structure
         if (!Data || !Array.isArray(Data)) {
             return res.status(400).json({
