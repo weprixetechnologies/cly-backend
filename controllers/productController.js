@@ -500,7 +500,10 @@ const updateInventoryBySku = async (req, res) => {
             const logLines = [];
             if (skippedItems.length > 0) {
                 skippedItems.forEach(si => {
-                    logLines.push(`update-inventory | skipped | index=${si.index} | reason=${si.reason}`);
+                    const payload = (() => {
+                        try { return JSON.stringify(si.data); } catch (_) { return '<<unserializable>>'; }
+                    })();
+                    logLines.push(`update-inventory | skipped | index=${si.index} | reason=${si.reason} | data=${payload}`);
                 });
             }
             if (Array.isArray(result?.errors) && result.errors.length > 0) {
@@ -643,7 +646,10 @@ const bulkAddProducts = async (req, res) => {
             const logLines = [];
             if (skippedItems.length > 0) {
                 skippedItems.forEach(si => {
-                    logLines.push(`bulk-add | skipped | index=${si.index} | reason=${si.reason}`);
+                    const payload = (() => {
+                        try { return JSON.stringify(si.data); } catch (_) { return '<<unserializable>>'; }
+                    })();
+                    logLines.push(`bulk-add | skipped | index=${si.index} | reason=${si.reason} | data=${payload}`);
                 });
             }
             if (Array.isArray(result?.errors) && result.errors.length > 0) {
