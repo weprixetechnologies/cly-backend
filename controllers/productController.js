@@ -1,5 +1,6 @@
 const productModel = require('../models/productModel');
 const categoryService = require('../services/categoryService');
+const { appendLogLines } = require('../utils/errorTallyLogger');
 
 // Add new product
 const addProduct = async (req, res) => {
@@ -430,7 +431,7 @@ const updateInventoryBySku = async (req, res) => {
         // Filter out items without SKU and track skipped items
         const validProducts = [];
         const skippedItems = [];
-        
+
         Data.forEach((product, index) => {
             if (!product.sku || product.sku.trim() === '') {
                 skippedItems.push({
@@ -494,6 +495,22 @@ const updateInventoryBySku = async (req, res) => {
             }
         };
 
+        // Log skipped items and per-item errors to errorTallySync.txt
+        try {
+            const logLines = [];
+            if (skippedItems.length > 0) {
+                skippedItems.forEach(si => {
+                    logLines.push(`update-inventory | skipped | index=${si.index} | reason=${si.reason}`);
+                });
+            }
+            if (Array.isArray(result?.errors) && result.errors.length > 0) {
+                result.errors.forEach(err => {
+                    logLines.push(`update-inventory | error | index=${err.index} | sku=${err.sku} | msg=${err.error}`);
+                });
+            }
+            appendLogLines(logLines);
+        } catch (_) { }
+
         // If all products failed, return 400
         if (result.successful === 0) {
             return res.status(400).json({
@@ -546,7 +563,7 @@ const bulkAddProducts = async (req, res) => {
         // Filter out items without SKU and track skipped items
         const validProducts = [];
         const skippedItems = [];
-        
+
         Data.forEach((product, index) => {
             if (!product.sku || product.sku.trim() === '') {
                 skippedItems.push({
@@ -620,6 +637,22 @@ const bulkAddProducts = async (req, res) => {
                 })) : []
             }
         };
+
+        // Log skipped items and per-item errors to errorTallySync.txt
+        try {
+            const logLines = [];
+            if (skippedItems.length > 0) {
+                skippedItems.forEach(si => {
+                    logLines.push(`bulk-add | skipped | index=${si.index} | reason=${si.reason}`);
+                });
+            }
+            if (Array.isArray(result?.errors) && result.errors.length > 0) {
+                result.errors.forEach(err => {
+                    logLines.push(`bulk-add | error | index=${err.index} | sku=${err.sku} | msg=${err.error}`);
+                });
+            }
+            appendLogLines(logLines);
+        } catch (_) { }
 
         // If all products failed, return 400
         if (result.successful === 0) {
