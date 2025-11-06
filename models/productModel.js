@@ -426,9 +426,7 @@ async function bulkCreateProducts(productsData) {
                         minQty = 1,
                         categoryID = null,
                         categoryName = null,
-                        themeCategory = null,
-                        featuredImages = '',
-                        galleryImages = []
+                        themeCategory = null
                     } = productData;
 
                     // Prepare all update fields - override with request data
@@ -442,17 +440,10 @@ async function bulkCreateProducts(productsData) {
                         categoryID: categoryID || null,
                         categoryName: categoryName || null,
                         themeCategory: (themeCategory && themeCategory.trim() !== '') ? themeCategory.trim() : null,
-                        featuredImages: featuredImages || ''
+
                     };
 
-                    // Handle galleryImages (array should be JSON stringified)
-                    if (Array.isArray(galleryImages)) {
-                        updateFields.galleryImages = JSON.stringify(galleryImages);
-                    } else if (typeof galleryImages === 'string') {
-                        updateFields.galleryImages = galleryImages;
-                    } else {
-                        updateFields.galleryImages = JSON.stringify([]);
-                    }
+                    // Intentionally do not modify featuredImages or galleryImages during bulk update
 
                     // Update all fields - complete override
                     await updateProductBySku(productData.sku, updateFields);
