@@ -448,7 +448,9 @@ const updateInventoryBySku = async (req, res) => {
         const skippedItems = [];
 
         Data.forEach((product, index) => {
-            if (!product.sku || product.sku.trim() === '') {
+            // Check if SKU is missing, null, undefined, or empty string
+            const sku = product.sku;
+            if (!sku || sku === null || sku === undefined || (typeof sku === 'string' && sku.trim() === '')) {
                 skippedItems.push({
                     index,
                     reason: 'Missing or empty SKU',
@@ -459,14 +461,7 @@ const updateInventoryBySku = async (req, res) => {
             }
         });
 
-        // Check if we have any valid products after filtering
-        if (validProducts.length === 0) {
-            return res.status(400).json({
-                success: false,
-                message: 'All products are missing required field: sku',
-                skipped: skippedItems.length
-            });
-        }
+        // Continue processing even if all products are invalid (will result in 0 successful operations)
 
         // Normalize product data: map BoxQty/MOQ and set defaults
         const normalizedData = validProducts.map((product) => {
@@ -494,7 +489,10 @@ const updateInventoryBySku = async (req, res) => {
         });
 
         // Process bulk update/create - same logic as bulk-add
-        const result = await productModel.bulkCreateProducts(normalizedData);
+        // If no valid products, result will be empty but we still return success
+        const result = validProducts.length > 0 
+            ? await productModel.bulkCreateProducts(normalizedData)
+            : { total: 0, successful: 0, failed: 0, results: [], errors: [] };
 
         // Prepare response with skipped items info
         const response = {
@@ -529,17 +527,8 @@ const updateInventoryBySku = async (req, res) => {
             appendLogLines(logLines);
         } catch (_) { }
 
-        // If all products failed, return 400
-        if (result.successful === 0) {
-            return res.status(400).json({
-                success: false,
-                message: 'All products failed to process',
-                data: result
-            });
-        }
-
-        // If some products failed, return 207 (Multi-Status)
-        if (result.failed > 0) {
+        // If some products failed or were skipped, return 207 (Multi-Status)
+        if (result.failed > 0 || skippedItems.length > 0 || result.successful === 0) {
             return res.status(207).json(response);
         }
 
@@ -562,9 +551,11 @@ const bulkAddProducts = async (req, res) => {
 
     try {
         const { supplier_token, Data } = req.body;
+
         const fs = require('fs');
         const path = require('path');
         const LOG_PATH = path.join(__dirname, '..', 'datalog.txt');
+
         try {
             fs.appendFileSync(
                 LOG_PATH,
@@ -592,43 +583,42 @@ const bulkAddProducts = async (req, res) => {
         }
 
         // Filter out items without SKU and track skipped items
+        // Store products with their original indices for proper error tracking
         const validProducts = [];
         const skippedItems = [];
 
         Data.forEach((product, index) => {
-            if (!product.sku || product.sku.trim() === '') {
+            // Check if SKU is missing, null, undefined, or empty string
+            const sku = product.sku;
+            if (!sku || sku === null || sku === undefined || (typeof sku === 'string' && sku.trim() === '')) {
                 skippedItems.push({
                     index,
                     reason: 'Missing or empty SKU',
                     data: product
                 });
             } else {
-                validProducts.push(product);
+                // Store product with its original index
+                validProducts.push({ product, originalIndex: index });
             }
         });
 
-        // Check if we have any valid products after filtering
-        if (validProducts.length === 0) {
-            return res.status(400).json({
-                success: false,
-                message: 'All products are missing required field: sku',
-                skipped: skippedItems.length
-            });
-        }
-
-        // Validate remaining products for other required fields
-        for (let i = 0; i < validProducts.length; i++) {
-            const product = validProducts[i];
+        // Continue processing even if all products are invalid (will result in 0 successful operations)
+        // Skip products with missing productName but don't fail the whole request
+        const productsToProcess = [];
+        validProducts.forEach(({ product, originalIndex }) => {
             if (!product.productName) {
-                return res.status(400).json({
-                    success: false,
-                    message: `Product at index ${i} (after filtering) is missing required field: productName`
+                skippedItems.push({
+                    index: originalIndex,
+                    reason: 'Missing productName',
+                    data: product
                 });
+            } else {
+                productsToProcess.push(product);
             }
-        }
+        });
 
         // Normalize product data: map BoxQty/MOQ and set defaults
-        const normalizedData = validProducts.map((product) => {
+        const normalizedData = productsToProcess.map((product) => {
             // Map BoxQty to boxQty and MOQ to minQty
             // Support both uppercase (BoxQty, MOQ) and lowercase (boxQty, minQty) formats
             const boxQty = product.BoxQty !== undefined ? product.BoxQty : (product.boxQty !== undefined ? product.boxQty : null);
@@ -653,7 +643,10 @@ const bulkAddProducts = async (req, res) => {
         });
 
         // Process bulk creation
-        const result = await productModel.bulkCreateProducts(normalizedData);
+        // If no valid products, result will be empty but we still return success
+        const result = productsToProcess.length > 0 
+            ? await productModel.bulkCreateProducts(normalizedData)
+            : { total: 0, successful: 0, failed: 0, results: [], errors: [] };
 
         // Prepare response with skipped items info
         const response = {
@@ -688,17 +681,8 @@ const bulkAddProducts = async (req, res) => {
             appendLogLines(logLines);
         } catch (_) { }
 
-        // If all products failed, return 400
-        if (result.successful === 0) {
-            return res.status(400).json({
-                success: false,
-                message: 'All products failed to create',
-                data: result
-            });
-        }
-
-        // If some products failed, return 207 (Multi-Status)
-        if (result.failed > 0) {
+        // If some products failed or were skipped, return 207 (Multi-Status)
+        if (result.failed > 0 || skippedItems.length > 0 || result.successful === 0) {
             return res.status(207).json(response);
         }
 

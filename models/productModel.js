@@ -411,41 +411,40 @@ async function bulkCreateProducts(productsData) {
         for (let i = 0; i < productsData.length; i++) {
             const productData = productsData[i];
             try {
+                // Skip products with missing, null, or empty SKU
+                const productSku = productData.sku;
+                if (!productSku || productSku === null || productSku === undefined || String(productSku).trim() === '') {
+                    errors.push({
+                        index: i,
+                        sku: 'undefined',
+                        error: 'SKU is missing, null, or empty - product skipped'
+                    });
+                    continue;
+                }
+
                 // Check if SKU already exists
                 const existingProduct = await checkSkuExists(productData.sku);
 
                 if (existingProduct) {
-                    // SKU exists, override ALL data with request data
-                    // The controller has already normalized the data (boxQty, minQty, themeCategory)
+                    // SKU exists, update only: productName, productPrice, inventory, boxQty, minQty
                     const {
                         productName,
                         productPrice,
-                        description = '',
                         inventory = 0,
                         boxQty = 1,
-                        minQty = 1,
-                        categoryID = null,
-                        categoryName = null,
-                        themeCategory = null
+                        minQty = 1
                     } = productData;
 
-                    // Prepare all update fields - override with request data
+                    // Prepare update fields - only update specified fields
                     const updateFields = {
                         productName: productName || '',
                         productPrice: (productPrice !== undefined && productPrice !== null && !isNaN(productPrice)) ? parseFloat(productPrice) : 0,
-                        description: description || '',
                         inventory: (inventory !== undefined && inventory !== null && !isNaN(inventory)) ? parseInt(inventory) : 0,
                         boxQty: (boxQty !== undefined && boxQty !== null && !isNaN(boxQty) && parseInt(boxQty) >= 1) ? parseInt(boxQty) : 1,
-                        minQty: (minQty !== undefined && minQty !== null && !isNaN(minQty) && parseInt(minQty) >= 1) ? parseInt(minQty) : 1,
-                        categoryID: categoryID || null,
-                        categoryName: categoryName || null,
-                        themeCategory: (themeCategory && themeCategory.trim() !== '') ? themeCategory.trim() : null,
-
+                        minQty: (minQty !== undefined && minQty !== null && !isNaN(minQty) && parseInt(minQty) >= 1) ? parseInt(minQty) : 1
                     };
 
-                    // Intentionally do not modify featuredImages or galleryImages during bulk update
-
-                    // Update all fields - complete override
+                    // Update only specified fields (no category, description, themeCategory, images)
                     await updateProductBySku(productData.sku, updateFields);
 
                     results.push({
@@ -469,30 +468,26 @@ async function bulkCreateProducts(productsData) {
                     sku,
                     productName,
                     productPrice,
-                    description = '',
                     inventory = 0,
                     boxQty = 1,
-                    minQty = 1,
-                    themeCategory = null
+                    minQty = 1
                 } = productData;
 
                 // Ensure boxQty and minQty are at least 1
                 const finalBoxQty = (boxQty !== null && boxQty !== undefined && !isNaN(boxQty) && parseInt(boxQty) >= 1) ? parseInt(boxQty) : 1;
                 const finalMinQty = (minQty !== null && minQty !== undefined && !isNaN(minQty) && parseInt(minQty) >= 1) ? parseInt(minQty) : 1;
 
-                // Insert product
+                // Insert product - only insert specified fields
                 const [result] = await db.execute(
-                    'INSERT INTO products (productID, productName, productPrice, sku, description, inventory, boxQty, minQty, themeCategory) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                    'INSERT INTO products (productID, productName, productPrice, sku, inventory, boxQty, minQty) VALUES (?, ?, ?, ?, ?, ?, ?)',
                     [
                         productID,
                         productName,
                         productPrice || 0,
                         sku,
-                        description,
                         inventory,
                         finalBoxQty,
-                        finalMinQty,
-                        themeCategory || null
+                        finalMinQty
                     ]
                 );
 
