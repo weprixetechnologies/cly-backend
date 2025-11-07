@@ -103,8 +103,10 @@ const getAllProducts = async (req, res) => {
         // Parse outOfStock - default to true (include all products)
         // If not provided or explicitly 'true', include all products. Only exclude when explicitly 'false'
         const outOfStock = req.query.outOfStock === undefined || req.query.outOfStock === 'true' || req.query.outOfStock === true;
+        // Parse status - if provided, filter by active/inactive; if not provided or 'all', show all
+        const status = req.query.status && req.query.status !== 'all' ? req.query.status : null;
 
-        const result = await productModel.getAllProducts(page, limit, search, categoryID, minPrice, maxPrice, outOfStock);
+        const result = await productModel.getAllProducts(page, limit, search, categoryID, minPrice, maxPrice, outOfStock, status);
 
         res.status(200).json({
             success: true,
@@ -426,7 +428,7 @@ const updateInventoryBySku = async (req, res) => {
         } catch (err) {
             // Swallow file write errors to not interrupt the flow
         }
-        
+
 
         // Validate request structure
         if (!Data || !Array.isArray(Data)) {
@@ -490,7 +492,7 @@ const updateInventoryBySku = async (req, res) => {
 
         // Process bulk update/create - same logic as bulk-add
         // If no valid products, result will be empty but we still return success
-        const result = validProducts.length > 0 
+        const result = validProducts.length > 0
             ? await productModel.bulkCreateProducts(normalizedData)
             : { total: 0, successful: 0, failed: 0, results: [], errors: [] };
 
@@ -565,7 +567,7 @@ const bulkAddProducts = async (req, res) => {
         } catch (err) {
             // Swallow file write errors to not interrupt the flow
         }
-        
+
 
         // Validate request structure
         if (!Data || !Array.isArray(Data)) {
@@ -644,7 +646,7 @@ const bulkAddProducts = async (req, res) => {
 
         // Process bulk creation
         // If no valid products, result will be empty but we still return success
-        const result = productsToProcess.length > 0 
+        const result = productsToProcess.length > 0
             ? await productModel.bulkCreateProducts(normalizedData)
             : { total: 0, successful: 0, failed: 0, results: [], errors: [] };
 

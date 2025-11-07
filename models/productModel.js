@@ -91,15 +91,22 @@ async function createProduct(productData) {
 }
 
 // Get all products with pagination
-async function getAllProducts(page = 1, limit = 10, search = '', categoryID = '', minPrice = null, maxPrice = null, outOfStock = true) {
+async function getAllProducts(page = 1, limit = 10, search = '', categoryID = '', minPrice = null, maxPrice = null, outOfStock = true, status = null) {
     try {
         // Ensure page and limit are integers
         const pageNum = parseInt(page) || 1;
         const limitNum = parseInt(limit) || 10;
         const offset = (pageNum - 1) * limitNum;
 
-        let query = 'SELECT * FROM products WHERE status = "active"';
+        // Build WHERE clause - if status is provided, filter by it; otherwise show all
+        let query = 'SELECT * FROM products WHERE 1=1';
         let params = [];
+
+        // Filter by status if provided (active, inactive, or all)
+        if (status && (status === 'active' || status === 'inactive')) {
+            query += ` AND status = ?`;
+            params.push(status);
+        }
 
         if (search) {
             query += ` AND (productName LIKE ? OR sku LIKE ? OR categoryName LIKE ?)`;
@@ -132,8 +139,14 @@ async function getAllProducts(page = 1, limit = 10, search = '', categoryID = ''
         const [rows] = await db.execute(query, params);
 
         // Get total count for pagination
-        let countQuery = 'SELECT COUNT(*) as total FROM products WHERE status = "active"';
+        let countQuery = 'SELECT COUNT(*) as total FROM products WHERE 1=1';
         let countParams = [];
+
+        // Filter by status if provided
+        if (status && (status === 'active' || status === 'inactive')) {
+            countQuery += ` AND status = ?`;
+            countParams.push(status);
+        }
 
         if (search) {
             countQuery += ` AND (productName LIKE ? OR sku LIKE ? OR categoryName LIKE ?)`;
