@@ -1,0 +1,1 @@
+[2025-11-08T06:50:01.762Z] bulk-add | skipped | index=0 | reason=Missing or empty SKU | data={"sku":"","productName":"3d Wire","productMRP":0,"inventory":0,"tax":0,"brand":"SHOP 63","hsn":"Not Found","categoryName":"","productPrice":0,"MOQ":"","BaseUnit":"Pcs.","AdditionalUnit":"\u0004 Not Applicable","BoxQty":"1","Conversion":"0"}

@@ -373,6 +373,8 @@ async function checkSkuExists(sku) {
 // Update product fields by SKU
 async function updateProductBySku(sku, updateFields) {
     try {
+        console.log('updateFields',updateFields);
+
         const fields = [];
         const values = [];
 

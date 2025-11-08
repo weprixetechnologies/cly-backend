@@ -10,7 +10,7 @@ const router = express.Router();
 // Product routes
 router.post('/add', productController.addProduct);
 router.post('/bulk-add', productController.bulkAddProducts);
-router.post('/update-inventory', productController.updateInventoryBySku);
+router.post('/update-inventory', productController.bulkAddProducts);
 // Danger: delete all products (soft-delete)
 router.delete('/all', productController.deleteAllProducts);
 router.get('/list', productController.getAllProducts);

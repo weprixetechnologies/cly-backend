@@ -630,17 +630,14 @@ const bulkAddProducts = async (req, res) => {
             const normalizedBoxQty = (boxQty === null || boxQty === undefined || boxQty === '' || isNaN(boxQty)) ? 1 : parseInt(boxQty);
             const normalizedMinQty = (minQty === null || minQty === undefined || minQty === '' || isNaN(minQty)) ? 1 : parseInt(minQty);
 
-            // Map categoryName to themeCategory (handle empty string as null)
-            const categoryNameValue = product.categoryName && product.categoryName.trim() !== '' ? product.categoryName : null;
-            const themeCategoryValue = product.themeCategory && product.themeCategory.trim() !== '' ? product.themeCategory : null;
-            const themeCategory = categoryNameValue || themeCategoryValue || null;
+           
 
             // Create normalized product object
             return {
                 ...product,
                 boxQty: normalizedBoxQty,
                 minQty: normalizedMinQty,
-                themeCategory: themeCategory || null
+         
             };
         });
 
