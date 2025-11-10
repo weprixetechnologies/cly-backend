@@ -384,6 +384,142 @@ async function updateUserPassword(uid, hashedPassword) {
     }
 }
 
+// Get user statistics with filters
+async function getUserStats(search = '', approvalStatus = null) {
+    try {
+        // Build WHERE clause
+        let whereClause = 'WHERE 1=1';
+        let params = [];
+
+        // Filter by approval status if provided
+        if (approvalStatus && approvalStatus !== 'all') {
+            whereClause += ` AND approval_status = ?`;
+            params.push(approvalStatus);
+        }
+
+        // Filter by search term
+        if (search) {
+            whereClause += ` AND (
+                name LIKE ? OR 
+                emailID LIKE ? OR 
+                username LIKE ? OR 
+                phoneNumber LIKE ? OR 
+                (gstin IS NOT NULL AND gstin LIKE ?)
+            )`;
+            const searchPattern = `%${search}%`;
+            params.push(searchPattern, searchPattern, searchPattern, searchPattern, searchPattern);
+        }
+
+        // Get total count
+        const [totalResult] = await db.execute(
+            `SELECT COUNT(*) as total FROM users ${whereClause}`,
+            params
+        );
+        const total = totalResult[0].total;
+
+        // Build base WHERE for status counts (without approval_status filter)
+        let baseWhere = 'WHERE 1=1';
+        let baseParams = [];
+        if (search) {
+            baseWhere += ` AND (
+                name LIKE ? OR 
+                emailID LIKE ? OR 
+                username LIKE ? OR 
+                phoneNumber LIKE ? OR 
+                (gstin IS NOT NULL AND gstin LIKE ?)
+            )`;
+            const searchPattern = `%${search}%`;
+            baseParams.push(searchPattern, searchPattern, searchPattern, searchPattern, searchPattern);
+        }
+
+        // Get approved count
+        let approved = 0;
+        if (approvalStatus !== 'rejected' && approvalStatus !== 'pending') {
+            if (approvalStatus === 'approved') {
+                approved = total;
+            } else {
+                const approvedWhere = baseWhere + ` AND approval_status = 'approved'`;
+                const [approvedResult] = await db.execute(
+                    `SELECT COUNT(*) as total FROM users ${approvedWhere}`,
+                    baseParams
+                );
+                approved = approvedResult[0].total;
+            }
+        }
+
+        // Get pending count
+        let pending = 0;
+        if (approvalStatus !== 'approved' && approvalStatus !== 'rejected') {
+            if (approvalStatus === 'pending') {
+                pending = total;
+            } else {
+                const pendingWhere = baseWhere + ` AND approval_status = 'pending'`;
+                const [pendingResult] = await db.execute(
+                    `SELECT COUNT(*) as total FROM users ${pendingWhere}`,
+                    baseParams
+                );
+                pending = pendingResult[0].total;
+            }
+        }
+
+        // Get rejected count
+        let rejected = 0;
+        if (approvalStatus !== 'approved' && approvalStatus !== 'pending') {
+            if (approvalStatus === 'rejected') {
+                rejected = total;
+            } else {
+                const rejectedWhere = baseWhere + ` AND approval_status = 'rejected'`;
+                const [rejectedResult] = await db.execute(
+                    `SELECT COUNT(*) as total FROM users ${rejectedWhere}`,
+                    baseParams
+                );
+                rejected = rejectedResult[0].total;
+            }
+        }
+
+        // Get active users count (status = 'active')
+        const [activeResult] = await db.execute(
+            `SELECT COUNT(*) as total FROM users ${whereClause} AND status = 'active'`,
+            params
+        );
+        const active = activeResult[0].total;
+
+        // Get admin users count
+        const [adminResult] = await db.execute(
+            `SELECT COUNT(*) as total FROM users ${whereClause} AND role = 'admin'`,
+            params
+        );
+        const admin = adminResult[0].total;
+
+        // Get regular users count
+        const [regularResult] = await db.execute(
+            `SELECT COUNT(*) as total FROM users ${whereClause} AND role = 'user'`,
+            params
+        );
+        const regular = regularResult[0].total;
+
+        // Get recent users (last 7 days)
+        const [recentResult] = await db.execute(
+            `SELECT COUNT(*) as total FROM users ${whereClause} AND createdAt >= DATE_SUB(NOW(), INTERVAL 7 DAY)`,
+            params
+        );
+        const recent = recentResult[0].total;
+
+        return {
+            total,
+            approved,
+            pending,
+            rejected,
+            active,
+            admin,
+            regular,
+            recent
+        };
+    } catch (error) {
+        throw new Error(`Error fetching user stats: ${error.message}`);
+    }
+}
+
 module.exports = {
     checkUsernameExists,
     checkEmailExists,
@@ -407,5 +543,6 @@ module.exports = {
     updateUserApproval,
     getUserByUid,
     updateUser,
-    updateUserPassword
+    updateUserPassword,
+    getUserStats
 };

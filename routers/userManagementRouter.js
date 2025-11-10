@@ -12,6 +12,9 @@ router.get('/pending', userManagementController.getPendingUsers);
 // Get all users
 router.get('/all', userManagementController.getAllUsers);
 
+// Get user list statistics
+router.get('/stats', userManagementController.getUserListStats);
+
 // Get user details
 router.get('/:uid', userManagementController.getUserDetails);
 

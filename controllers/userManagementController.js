@@ -298,6 +298,28 @@ async function getUserStatistics(req, res) {
     }
 }
 
+// Get user statistics
+async function getUserListStats(req, res) {
+    try {
+        const search = req.query.search || '';
+        const approvalStatus = req.query.approvalStatus && req.query.approvalStatus !== 'all' ? req.query.approvalStatus : null;
+
+        const stats = await authModel.getUserStats(search, approvalStatus);
+
+        res.status(200).json({
+            success: true,
+            data: stats
+        });
+    } catch (error) {
+        console.error('Error fetching user stats:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch user statistics',
+            error: error.message
+        });
+    }
+}
+
 module.exports = {
     getPendingUsers,
     getAllUsers,
@@ -306,5 +328,6 @@ module.exports = {
     getUserDetails,
     updateUser,
     getUserOrders,
-    getUserStatistics
+    getUserStatistics,
+    getUserListStats
 };

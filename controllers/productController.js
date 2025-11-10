@@ -698,6 +698,29 @@ const bulkAddProducts = async (req, res) => {
     }
 };
 
+// Get product statistics
+const getProductStats = async (req, res) => {
+    try {
+        const search = req.query.search || '';
+        const categoryID = req.query.categoryID || '';
+        const status = req.query.status && req.query.status !== 'all' ? req.query.status : null;
+
+        const stats = await productModel.getProductStats(search, categoryID, status);
+
+        res.status(200).json({
+            success: true,
+            data: stats
+        });
+    } catch (error) {
+        console.error('Error fetching product stats:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch product statistics',
+            error: error.message
+        });
+    }
+};
+
 module.exports = {
     addProduct,
     getAllProducts,
@@ -709,5 +732,6 @@ module.exports = {
     createCategory,
     updateInventoryBySku,
     bulkAddProducts,
-    deleteAllProducts
+    deleteAllProducts,
+    getProductStats
 };

@@ -536,6 +536,108 @@ async function bulkCreateProducts(productsData) {
     }
 }
 
+// Get product statistics with filters
+async function getProductStats(search = '', categoryID = '', status = null) {
+    try {
+        // Build WHERE clause
+        let whereClause = 'WHERE 1=1';
+        let params = [];
+
+        // Filter by status if provided
+        if (status && (status === 'active' || status === 'inactive')) {
+            whereClause += ` AND status = ?`;
+            params.push(status);
+        }
+
+        if (search) {
+            whereClause += ` AND (productName LIKE ? OR sku LIKE ? OR categoryName LIKE ?)`;
+            params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+        }
+
+        if (categoryID) {
+            whereClause += ` AND categoryID = ?`;
+            params.push(categoryID);
+        }
+
+        // Get total count
+        const [totalResult] = await db.execute(
+            `SELECT COUNT(*) as total FROM products ${whereClause}`,
+            params
+        );
+        const total = totalResult[0].total;
+
+        // Get active count (only if not filtering by inactive)
+        let active = 0;
+        if (status !== 'inactive') {
+            const activeParams = [...params];
+            const activeWhereClause = status === 'active' ? whereClause : whereClause + ` AND status = 'active'`;
+            if (status !== 'active') {
+                activeParams.push('active');
+            }
+            const [activeResult] = await db.execute(
+                `SELECT COUNT(*) as total FROM products ${activeWhereClause}`,
+                activeParams
+            );
+            active = activeResult[0].total;
+        }
+
+        // Get inactive count (only if not filtering by active)
+        let inactive = 0;
+        if (status !== 'active') {
+            const inactiveParams = [...params];
+            const inactiveWhereClause = status === 'inactive' ? whereClause : whereClause + ` AND status = 'inactive'`;
+            if (status !== 'inactive') {
+                inactiveParams.push('inactive');
+            }
+            const [inactiveResult] = await db.execute(
+                `SELECT COUNT(*) as total FROM products ${inactiveWhereClause}`,
+                inactiveParams
+            );
+            inactive = inactiveResult[0].total;
+        }
+
+        // Get low stock count (inventory < 10)
+        const [lowStockResult] = await db.execute(
+            `SELECT COUNT(*) as total FROM products ${whereClause} AND inventory > 0 AND inventory < 10`,
+            params
+        );
+        const lowStock = lowStockResult[0].total;
+
+        // Get out of stock count (inventory = 0)
+        const [outOfStockResult] = await db.execute(
+            `SELECT COUNT(*) as total FROM products ${whereClause} AND inventory = 0`,
+            params
+        );
+        const outOfStock = outOfStockResult[0].total;
+
+        // Get total categories count (distinct categories in filtered results)
+        const [categoriesResult] = await db.execute(
+            `SELECT COUNT(DISTINCT categoryID) as total FROM products ${whereClause} AND categoryID IS NOT NULL`,
+            params
+        );
+        const totalCategories = categoriesResult[0].total;
+
+        // Get total inventory value
+        const [inventoryValueResult] = await db.execute(
+            `SELECT SUM(inventory * productPrice) as total FROM products ${whereClause}`,
+            params
+        );
+        const inventoryValue = inventoryValueResult[0].total || 0;
+
+        return {
+            total,
+            active,
+            inactive,
+            lowStock,
+            outOfStock,
+            totalCategories,
+            inventoryValue: parseFloat(inventoryValue)
+        };
+    } catch (error) {
+        throw new Error(`Error fetching product stats: ${error.message}`);
+    }
+}
+
 module.exports = {
     createProduct,
     getAllProducts,
@@ -550,5 +652,6 @@ module.exports = {
     updateProductBySku,
     checkSkuExists,
     bulkCreateProducts,
-    clearCategoryFromProducts
+    clearCategoryFromProducts,
+    getProductStats
 };
