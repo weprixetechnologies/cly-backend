@@ -21,9 +21,13 @@ const faqRouter = require('./routers/faqRouter.js');
 const aboutRouter = require('./routers/aboutRouter.js');
 const invoiceRouter = require('./routers/invoiceRouter.js');
 const passwordResetRouter = require('./routers/passwordResetRouter.js');
+const visitorRouter = require('./routers/visitorRouter.js');
 
 // Middleware
 app.use(cors());
+
+// Trust proxy for accurate IP detection
+app.set('trust proxy', true);
 
 
 
@@ -61,6 +65,7 @@ app.use('/api/faq', faqRouter);
 app.use('/api/about', aboutRouter);
 app.use('/api/invoice', invoiceRouter);
 app.use('/api/password-reset', passwordResetRouter);
+app.use('/api/visitors', visitorRouter);
 
 // Setup routes (for creating tables)
 // Additional setup routes can be added here as needed
