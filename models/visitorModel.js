@@ -1,8 +1,33 @@
 const db = require('../utils/dbconnect');
 
+// Check if visitor from same IP visited recently (within last minute)
+async function hasRecentVisit(ip) {
+    try {
+        const [rows] = await db.execute(
+            'SELECT visitorID FROM visitorData WHERE ip = ? AND visitedOn >= DATE_SUB(NOW(), INTERVAL 1 MINUTE) LIMIT 1',
+            [ip]
+        );
+        return rows.length > 0;
+    } catch (error) {
+        // If check fails, allow the insert (fail open)
+        return false;
+    }
+}
+
 // Create a new visitor record
 async function createVisitor(ip) {
     try {
+        // Check if this IP has visited in the last minute to prevent duplicates
+        const recentVisit = await hasRecentVisit(ip);
+        if (recentVisit) {
+            // Return a success response but don't create duplicate entry
+            return {
+                visitorID: null,
+                affectedRows: 0,
+                duplicate: true
+            };
+        }
+
         const [result] = await db.execute(
             'INSERT INTO visitorData (visitedOn, ip) VALUES (NOW(), ?)',
             [ip]
@@ -10,7 +35,8 @@ async function createVisitor(ip) {
 
         return {
             visitorID: result.insertId,
-            affectedRows: result.affectedRows
+            affectedRows: result.affectedRows,
+            duplicate: false
         };
     } catch (error) {
         throw new Error(`Error creating visitor: ${error.message}`);

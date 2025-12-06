@@ -96,10 +96,21 @@ const getAllProducts = async (req, res) => {
     try {
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
-        const search = req.query.search || '';
-        const categoryID = req.query.categoryID || '';
-        const minPrice = req.query.minPrice || null;
-        const maxPrice = req.query.maxPrice || null;
+        const search = (req.query.search && typeof req.query.search === 'string') ? req.query.search.trim() : '';
+        const categoryID = (req.query.categoryID && typeof req.query.categoryID === 'string' && req.query.categoryID.trim() !== '') ? req.query.categoryID.trim() : '';
+        let minPrice = null;
+        let maxPrice = null;
+        
+        // Safely parse minPrice
+        if (req.query.minPrice && req.query.minPrice !== '' && !isNaN(req.query.minPrice)) {
+            minPrice = parseFloat(req.query.minPrice);
+        }
+        
+        // Safely parse maxPrice
+        if (req.query.maxPrice && req.query.maxPrice !== '' && !isNaN(req.query.maxPrice)) {
+            maxPrice = parseFloat(req.query.maxPrice);
+        }
+        
         // Parse outOfStock - default to true (include all products)
         // If not provided or explicitly 'true', include all products. Only exclude when explicitly 'false'
         const outOfStock = req.query.outOfStock === undefined || req.query.outOfStock === 'true' || req.query.outOfStock === true;

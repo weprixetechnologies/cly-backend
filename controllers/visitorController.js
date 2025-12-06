@@ -8,6 +8,17 @@ const createVisitor = async (req, res) => {
 
         const visitor = await visitorModel.createVisitor(ip);
 
+        // If it's a duplicate visit (within 1 minute), still return success but don't create new entry
+        if (visitor.duplicate) {
+            return res.status(200).json({
+                success: true,
+                message: 'Visitor already recorded recently',
+                data: {
+                    duplicate: true
+                }
+            });
+        }
+
         res.status(201).json({
             success: true,
             message: 'Visitor recorded successfully',

@@ -113,17 +113,17 @@ async function getAllProducts(page = 1, limit = 10, search = '', categoryID = ''
             params.push(`%${search}%`, `%${search}%`, `%${search}%`);
         }
 
-        if (categoryID) {
+        if (categoryID && typeof categoryID === 'string' && categoryID.trim() !== '') {
             query += ` AND categoryID = ?`;
-            params.push(categoryID);
+            params.push(categoryID.trim());
         }
 
-        if (minPrice !== null && minPrice !== undefined && minPrice !== '') {
+        if (minPrice !== null && minPrice !== undefined && minPrice !== '' && !isNaN(minPrice)) {
             query += ` AND productPrice >= ?`;
             params.push(parseFloat(minPrice));
         }
 
-        if (maxPrice !== null && maxPrice !== undefined && maxPrice !== '') {
+        if (maxPrice !== null && maxPrice !== undefined && maxPrice !== '' && !isNaN(maxPrice)) {
             query += ` AND productPrice <= ?`;
             params.push(parseFloat(maxPrice));
         }
@@ -153,17 +153,17 @@ async function getAllProducts(page = 1, limit = 10, search = '', categoryID = ''
             countParams.push(`%${search}%`, `%${search}%`, `%${search}%`);
         }
 
-        if (categoryID) {
+        if (categoryID && typeof categoryID === 'string' && categoryID.trim() !== '') {
             countQuery += ` AND categoryID = ?`;
-            countParams.push(categoryID);
+            countParams.push(categoryID.trim());
         }
 
-        if (minPrice !== null && minPrice !== undefined && minPrice !== '') {
+        if (minPrice !== null && minPrice !== undefined && minPrice !== '' && !isNaN(minPrice)) {
             countQuery += ` AND productPrice >= ?`;
             countParams.push(parseFloat(minPrice));
         }
 
-        if (maxPrice !== null && maxPrice !== undefined && maxPrice !== '') {
+        if (maxPrice !== null && maxPrice !== undefined && maxPrice !== '' && !isNaN(maxPrice)) {
             countQuery += ` AND productPrice <= ?`;
             countParams.push(parseFloat(maxPrice));
         }
