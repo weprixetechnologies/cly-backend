@@ -103,29 +103,40 @@ async function getAllProducts(page = 1, limit = 10, search = '', categoryID = ''
         let params = [];
 
         // Filter by status if provided (active, inactive, or all)
-        if (status && (status === 'active' || status === 'inactive')) {
+        if (status && typeof status === 'string' && (status === 'active' || status === 'inactive')) {
             query += ` AND status = ?`;
             params.push(status);
         }
 
-        if (search) {
+        // Validate and add search parameter
+        if (search && typeof search === 'string' && search.trim() !== '') {
+            const searchTerm = `%${search.trim()}%`;
             query += ` AND (productName LIKE ? OR sku LIKE ? OR categoryName LIKE ?)`;
-            params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+            params.push(searchTerm, searchTerm, searchTerm);
         }
 
+        // Validate and add categoryID parameter
         if (categoryID && typeof categoryID === 'string' && categoryID.trim() !== '') {
             query += ` AND categoryID = ?`;
             params.push(categoryID.trim());
         }
 
-        if (minPrice !== null && minPrice !== undefined && minPrice !== '' && !isNaN(minPrice)) {
-            query += ` AND productPrice >= ?`;
-            params.push(parseFloat(minPrice));
+        // Validate and add minPrice parameter
+        if (minPrice !== null && minPrice !== undefined && minPrice !== '') {
+            const minPriceNum = parseFloat(minPrice);
+            if (!isNaN(minPriceNum) && isFinite(minPriceNum)) {
+                query += ` AND productPrice >= ?`;
+                params.push(minPriceNum);
+            }
         }
 
-        if (maxPrice !== null && maxPrice !== undefined && maxPrice !== '' && !isNaN(maxPrice)) {
-            query += ` AND productPrice <= ?`;
-            params.push(parseFloat(maxPrice));
+        // Validate and add maxPrice parameter
+        if (maxPrice !== null && maxPrice !== undefined && maxPrice !== '') {
+            const maxPriceNum = parseFloat(maxPrice);
+            if (!isNaN(maxPriceNum) && isFinite(maxPriceNum)) {
+                query += ` AND productPrice <= ?`;
+                params.push(maxPriceNum);
+            }
         }
 
         // Filter out-of-stock products if outOfStock is false
@@ -143,29 +154,40 @@ async function getAllProducts(page = 1, limit = 10, search = '', categoryID = ''
         let countParams = [];
 
         // Filter by status if provided
-        if (status && (status === 'active' || status === 'inactive')) {
+        if (status && typeof status === 'string' && (status === 'active' || status === 'inactive')) {
             countQuery += ` AND status = ?`;
             countParams.push(status);
         }
 
-        if (search) {
+        // Validate and add search parameter
+        if (search && typeof search === 'string' && search.trim() !== '') {
+            const searchTerm = `%${search.trim()}%`;
             countQuery += ` AND (productName LIKE ? OR sku LIKE ? OR categoryName LIKE ?)`;
-            countParams.push(`%${search}%`, `%${search}%`, `%${search}%`);
+            countParams.push(searchTerm, searchTerm, searchTerm);
         }
 
+        // Validate and add categoryID parameter
         if (categoryID && typeof categoryID === 'string' && categoryID.trim() !== '') {
             countQuery += ` AND categoryID = ?`;
             countParams.push(categoryID.trim());
         }
 
-        if (minPrice !== null && minPrice !== undefined && minPrice !== '' && !isNaN(minPrice)) {
-            countQuery += ` AND productPrice >= ?`;
-            countParams.push(parseFloat(minPrice));
+        // Validate and add minPrice parameter
+        if (minPrice !== null && minPrice !== undefined && minPrice !== '') {
+            const minPriceNum = parseFloat(minPrice);
+            if (!isNaN(minPriceNum) && isFinite(minPriceNum)) {
+                countQuery += ` AND productPrice >= ?`;
+                countParams.push(minPriceNum);
+            }
         }
 
-        if (maxPrice !== null && maxPrice !== undefined && maxPrice !== '' && !isNaN(maxPrice)) {
-            countQuery += ` AND productPrice <= ?`;
-            countParams.push(parseFloat(maxPrice));
+        // Validate and add maxPrice parameter
+        if (maxPrice !== null && maxPrice !== undefined && maxPrice !== '') {
+            const maxPriceNum = parseFloat(maxPrice);
+            if (!isNaN(maxPriceNum) && isFinite(maxPriceNum)) {
+                countQuery += ` AND productPrice <= ?`;
+                countParams.push(maxPriceNum);
+            }
         }
 
         // Filter out-of-stock products in count query if outOfStock is false
@@ -373,7 +395,7 @@ async function checkSkuExists(sku) {
 // Update product fields by SKU
 async function updateProductBySku(sku, updateFields) {
     try {
-        console.log('updateFields',updateFields);
+        console.log('updateFields', updateFields);
 
         const fields = [];
         const values = [];
