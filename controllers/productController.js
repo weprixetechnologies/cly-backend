@@ -17,7 +17,8 @@ const addProduct = async (req, res) => {
             themeCategory,
             featuredImages,
             galleryImages,
-            inventory
+            inventory,
+            isFeatured
         } = req.body;
 
         // Validate required fields
@@ -59,7 +60,8 @@ const addProduct = async (req, res) => {
             themeCategory: themeCategory || null,
             featuredImages: featuredImages || '',
             galleryImages: galleryImages || [],
-            inventory: parseInt(inventory) || 0
+            inventory: parseInt(inventory) || 0,
+            isFeatured: isFeatured === true || isFeatured === 'true' || isFeatured === 1 || isFeatured === '1'
         };
 
         const result = await productModel.createProduct(productData);
@@ -189,7 +191,8 @@ const updateProduct = async (req, res) => {
             featuredImages,
             galleryImages,
             inventory,
-            status
+            status,
+            isFeatured
         } = req.body;
 
         // Check if product exists
@@ -233,7 +236,8 @@ const updateProduct = async (req, res) => {
             featuredImages: featuredImages || '',
             galleryImages: galleryImages || [],
             inventory: parseInt(inventory) || 0,
-            status: status || 'active'
+            status: status || 'active',
+            isFeatured: isFeatured === true || isFeatured === 'true' || isFeatured === 1 || isFeatured === '1'
         };
 
         const oldCategoryID = existingProduct.categoryID || null;
@@ -709,6 +713,26 @@ const bulkAddProducts = async (req, res) => {
     }
 };
 
+// Get featured products
+const getFeaturedProducts = async (req, res) => {
+    try {
+        const limit = parseInt(req.query.limit) || 20;
+        const products = await productModel.getFeaturedProducts(limit);
+
+        res.status(200).json({
+            success: true,
+            data: products
+        });
+    } catch (error) {
+        console.error('Error fetching featured products:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch featured products',
+            error: error.message
+        });
+    }
+};
+
 // Get product statistics
 const getProductStats = async (req, res) => {
     try {
@@ -744,5 +768,6 @@ module.exports = {
     updateInventoryBySku,
     bulkAddProducts,
     deleteAllProducts,
-    getProductStats
+    getProductStats,
+    getFeaturedProducts
 };

@@ -199,7 +199,7 @@ app.get('/test-email', async (req, res) => {
 });
 ```
 
-Then visit: `http://your-server:3300/test-email`
+Then visit: `http://your-server:9878/test-email`
 
 ### Recommended Production Setup
 

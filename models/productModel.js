@@ -58,11 +58,12 @@ async function createProduct(productData) {
             themeCategory,
             featuredImages,
             galleryImages,
-            inventory
+            inventory,
+            isFeatured
         } = productData;
 
         const [result] = await db.execute(
-            'INSERT INTO products (\n                productID, productName, productPrice, sku, description, \n                boxQty, minQty, categoryID, categoryName, themeCategory, \n                featuredImages, galleryImages, inventory\n            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            'INSERT INTO products (\n                productID, productName, productPrice, sku, description, \n                boxQty, minQty, categoryID, categoryName, themeCategory, \n                featuredImages, galleryImages, inventory, isFeatured\n            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
             [
                 productID,
                 productName,
@@ -76,7 +77,8 @@ async function createProduct(productData) {
                 themeCategory || null,
                 featuredImages,
                 JSON.stringify(galleryImages),
-                inventory
+                inventory,
+                isFeatured ? 1 : 0
             ]
         );
 
@@ -252,11 +254,12 @@ async function updateProduct(productID, productData) {
             featuredImages,
             galleryImages,
             inventory,
-            status
+            status,
+            isFeatured
         } = productData;
 
         const [result] = await db.execute(
-            'UPDATE products SET \n                productName = ?, productPrice = ?, sku = ?, description = ?,\n                boxQty = ?, minQty = ?, categoryID = ?, categoryName = ?, themeCategory = ?,\n                featuredImages = ?, galleryImages = ?, inventory = ?, status = ?,\n                updatedAt = CURRENT_TIMESTAMP\n            WHERE productID = ?',
+            'UPDATE products SET \n                productName = ?, productPrice = ?, sku = ?, description = ?,\n                boxQty = ?, minQty = ?, categoryID = ?, categoryName = ?, themeCategory = ?,\n                featuredImages = ?, galleryImages = ?, inventory = ?, status = ?, isFeatured = ?,\n                updatedAt = CURRENT_TIMESTAMP\n            WHERE productID = ?',
             [
                 productName,
                 productPrice,
@@ -271,6 +274,7 @@ async function updateProduct(productID, productData) {
                 JSON.stringify(galleryImages),
                 inventory,
                 status,
+                isFeatured ? 1 : 0,
                 productID
             ]
         );
@@ -558,6 +562,18 @@ async function bulkCreateProducts(productsData) {
     }
 }
 
+// Get featured products
+async function getFeaturedProducts(limit = 20) {
+    try {
+        const limitNum = parseInt(limit) || 20;
+        const query = `SELECT * FROM products WHERE isFeatured = 1 AND status = 'active' ORDER BY createdAt DESC LIMIT ?`;
+        const [rows] = await db.execute(query, [limitNum]);
+        return rows;
+    } catch (error) {
+        throw new Error(`Error fetching featured products: ${error.message}`);
+    }
+}
+
 // Get product statistics with filters
 async function getProductStats(search = '', categoryID = '', status = null) {
     try {
@@ -675,5 +691,6 @@ module.exports = {
     checkSkuExists,
     bulkCreateProducts,
     clearCategoryFromProducts,
-    getProductStats
+    getProductStats,
+    getFeaturedProducts
 };

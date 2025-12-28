@@ -14,6 +14,7 @@ router.post('/update-inventory', productController.bulkAddProducts);
 // Danger: delete all products (soft-delete)
 router.delete('/all', productController.deleteAllProducts);
 router.get('/list', productController.getAllProducts);
+router.get('/featured', productController.getFeaturedProducts);
 router.get('/stats', productController.getProductStats);
 router.get('/by-category/:categoryID', productController.getProductsByCategory);
 router.get('/:productID', productController.getProductById);

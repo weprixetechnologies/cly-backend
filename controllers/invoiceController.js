@@ -43,12 +43,15 @@ const downloadInvoice = async (req, res) => {
             });
         }
 
-        const invoiceHTML = await invoiceService.generateInvoiceHTML(orderID);
+        // Generate PDF using HTML to PDF conversion
+        const pdfBuffer = await invoiceService.generateInvoicePDF(orderID);
 
-        // Set headers for HTML response that can be printed as PDF
-        res.setHeader('Content-Type', 'text/html');
-        res.setHeader('Content-Disposition', `inline; filename="invoice-${orderID}.html"`);
-        res.send(invoiceHTML);
+        // Set headers for PDF response
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="invoice-${orderID}.pdf"`);
+
+        // Send PDF buffer
+        res.send(pdfBuffer);
     } catch (error) {
         console.error('[InvoiceController] Error downloading invoice:', error);
         res.status(500).json({

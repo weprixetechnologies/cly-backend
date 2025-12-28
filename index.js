@@ -75,5 +75,5 @@ app.use('/api/visitors', visitorRouter);
 // Additional setup routes can be added here as needed
 
 app.listen(9878, () => {
-    console.log(` Server started on port 3300 - LOGGING IS WORKING! `);
+    console.log(` Server started on port 9878 - LOGGING IS WORKING! `);
 });
