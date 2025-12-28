@@ -24,21 +24,14 @@ const passwordResetRouter = require('./routers/passwordResetRouter.js');
 const visitorRouter = require('./routers/visitorRouter.js');
 
 // Middleware
-// app.use(cors());
+app.use(cors());
 
 
 
-app.use(cors({
-    origin: "*",                 // allow all origins
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-}));
 
-// Explicitly handle preflight
-app.options("*", cors());
 
 // // Trust proxy for accurate IP detection
-// app.set('trust proxy', true);
+app.set('trust proxy', true);
 
 
 
@@ -81,6 +74,6 @@ app.use('/api/visitors', visitorRouter);
 // Setup routes (for creating tables)
 // Additional setup routes can be added here as needed
 
-app.listen(3300, () => {
+app.listen(9878, () => {
     console.log(` Server started on port 3300 - LOGGING IS WORKING! `);
 });
