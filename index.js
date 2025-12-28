@@ -24,10 +24,21 @@ const passwordResetRouter = require('./routers/passwordResetRouter.js');
 const visitorRouter = require('./routers/visitorRouter.js');
 
 // Middleware
-app.use(cors());
+// app.use(cors());
 
-// Trust proxy for accurate IP detection
-app.set('trust proxy', true);
+
+
+app.use(cors({
+    origin: "*",                 // allow all origins
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+}));
+
+// Explicitly handle preflight
+app.options("*", cors());
+
+// // Trust proxy for accurate IP detection
+// app.set('trust proxy', true);
 
 
 
