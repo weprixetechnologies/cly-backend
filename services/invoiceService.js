@@ -24,14 +24,18 @@ class InvoiceService {
             const firstOrder = orderData[0];
             const invoiceNumber = `INV-${orderID}-${Date.now()}`;
 
-            // Calculate totals based on accepted units
+            // Calculate totals based on accepted units and final price
             const itemTotal = orderData.reduce((sum, item) => {
                 const acceptedQty = Number(item.accepted_units || 0);
-                const price = Number(item.pItemPrice || item.productPrice || 0);
-                return sum + (acceptedQty * price);
+                const unitPrice = Number(
+                    item.final_price != null
+                        ? item.final_price
+                        : (item.pItemPrice || item.productPrice || 0)
+                );
+                return sum + (acceptedQty * unitPrice);
             }, 0);
 
-            const shipping = 0; // No shipping charges for now
+            const shipping = Number(firstOrder.shipping_charge || 0);
             const balanceDue = itemTotal + shipping;
 
             // Calculate payment totals
@@ -252,7 +256,11 @@ class InvoiceService {
                 ${items.map((item, index) => {
             const requestedQty = Number(item.requested_units || item.units || 0);
             const acceptedQty = Number(item.accepted_units || 0);
-            const unitPrice = Number(item.pItemPrice || item.productPrice || 0);
+            const unitPrice = Number(
+                item.final_price != null
+                    ? item.final_price
+                    : (item.pItemPrice || item.productPrice || 0)
+            );
             const totalAmount = acceptedQty * unitPrice;
 
             return `

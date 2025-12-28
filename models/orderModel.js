@@ -63,8 +63,8 @@ async function createOrderFromCart(orderData) {
             const paymentDate = paymentStatus === 'paid' ? new Date() : null;
 
             await connection.execute(
-                'INSERT INTO orders (orderID, productID, productName, boxes, units, requested_units, accepted_units, acceptance_status, featuredImage, uid, orderStatus, addressName, addressPhone, addressLine1, addressLine2, addressCity, addressState, addressPincode, paymentMode, couponCode, order_amount, productPrice, pItemPrice, payment_status, payment_date, customer_comment, themeCategory)\n                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                [orderID, productID, productName, requiredBoxes, units, units, 0, 'pending', featuredImage || '', uid, 'pending', deliveryName, deliveryPhone, address?.addressLine1 || '', address?.addressLine2 || '', address?.city || '', address?.state || '', address?.pincode || '', paymentMode || 'COD', couponCode || '', totalOrderAmount, productPrice, productPrice, paymentStatus, paymentDate, customerComment || null, themeCategory || null]
+                'INSERT INTO orders (orderID, productID, productName, boxes, units, requested_units, accepted_units, acceptance_status, featuredImage, uid, orderStatus, addressName, addressPhone, addressLine1, addressLine2, addressCity, addressState, addressPincode, paymentMode, couponCode, order_amount, productPrice, pItemPrice, final_price, payment_status, payment_date, customer_comment, themeCategory)\n                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                [orderID, productID, productName, requiredBoxes, units, units, 0, 'pending', featuredImage || '', uid, 'pending', deliveryName, deliveryPhone, address?.addressLine1 || '', address?.addressLine2 || '', address?.city || '', address?.state || '', address?.pincode || '', paymentMode || 'COD', couponCode || '', totalOrderAmount, productPrice, productPrice, productPrice, paymentStatus, paymentDate, customerComment || null, themeCategory || null]
             );
         }
 
@@ -127,15 +127,15 @@ async function updateOrderStatus(orderID, orderStatus) {
     }
 }
 
-// Update order with partial acceptance
-async function updateOrderAcceptance(orderID, productID, acceptedUnits, adminNotes = '') {
+// Update order with partial acceptance and optional custom price
+async function updateOrderAcceptance(orderID, productID, acceptedUnits, adminNotes = '', customPrice = null) {
     const connection = await db.getConnection();
     try {
         await connection.beginTransaction();
 
-        // Get the requested units and product price for this product
+        // Get the requested units and current item prices for this product
         const [rows] = await connection.execute(
-            'SELECT requested_units, pItemPrice FROM orders WHERE orderID = ? AND productID = ?',
+            'SELECT requested_units, pItemPrice, final_price FROM orders WHERE orderID = ? AND productID = ?',
             [orderID, productID]
         );
 
@@ -144,64 +144,64 @@ async function updateOrderAcceptance(orderID, productID, acceptedUnits, adminNot
         }
 
         const requestedUnits = rows[0].requested_units;
-        const itemPrice = parseFloat(rows[0].pItemPrice || 0);
+        const existingPrice = parseFloat(rows[0].pItemPrice || 0);
+        let effectivePrice = rows[0].final_price != null ? parseFloat(rows[0].final_price) : existingPrice;
+
+        // If a custom price is provided, override the effective price
+        if (customPrice !== null && customPrice !== '' && !isNaN(customPrice)) {
+            const parsedCustom = parseFloat(customPrice);
+            if (parsedCustom < 0) {
+                throw new Error('Custom price cannot be negative');
+            }
+            effectivePrice = parsedCustom;
+        }
         let acceptanceStatus = 'pending';
 
         if (acceptedUnits === 0) {
             acceptanceStatus = 'rejected';
+        } else if (acceptedUnits > requestedUnits) {
+            acceptanceStatus = 'increased';
         } else if (acceptedUnits === requestedUnits) {
             acceptanceStatus = 'full';
         } else if (acceptedUnits < requestedUnits) {
             acceptanceStatus = 'partial';
         }
 
-        // Update the specific product in the order
+        // Update only the specific product in the order (item-level status)
         const [result] = await connection.execute(
-            'UPDATE orders SET accepted_units = ?, acceptance_status = ?, admin_notes = ? WHERE orderID = ? AND productID = ?',
-            [acceptedUnits, acceptanceStatus, adminNotes, orderID, productID]
+            'UPDATE orders SET accepted_units = ?, acceptance_status = ?, admin_notes = ?, final_price = ? WHERE orderID = ? AND productID = ?',
+            [acceptedUnits, acceptanceStatus, adminNotes, effectivePrice, orderID, productID]
         );
 
         // Recalculate order amount based on accepted units for all products in this order
         const [allOrderItems] = await connection.execute(
-            'SELECT productID, accepted_units, pItemPrice FROM orders WHERE orderID = ?',
+            'SELECT productID, accepted_units, final_price, pItemPrice FROM orders WHERE orderID = ?',
             [orderID]
         );
 
-        let newTotalOrderAmount = 0;
-        allOrderItems.forEach(item => {
-            const acceptedUnits = parseInt(item.accepted_units || 0);
-            const itemPrice = parseFloat(item.pItemPrice || 0);
-            newTotalOrderAmount += acceptedUnits * itemPrice;
+        let itemsTotal = 0;
+        allOrderItems.forEach((item) => {
+            const accepted = parseInt(item.accepted_units || 0);
+            const price = item.final_price != null
+                ? parseFloat(item.final_price)
+                : parseFloat(item.pItemPrice || 0);
+            if (Number.isFinite(accepted) && Number.isFinite(price)) {
+                itemsTotal += accepted * price;
+            }
         });
 
-        // Update the order amount for all items in this order
-        await connection.execute(
-            'UPDATE orders SET order_amount = ? WHERE orderID = ?',
-            [newTotalOrderAmount, orderID]
-        );
-
-        // Update the overall order status based on all products
-        const [allItems] = await connection.execute(
-            'SELECT acceptance_status FROM orders WHERE orderID = ?',
+        // Get current shipping charge (per order, same for all rows)
+        const [shippingRows] = await connection.execute(
+            'SELECT shipping_charge FROM orders WHERE orderID = ? LIMIT 1',
             [orderID]
         );
+        const shippingCharge = shippingRows.length > 0 ? parseFloat(shippingRows[0].shipping_charge || 0) : 0;
+        const newOrderAmount = itemsTotal + (Number.isFinite(shippingCharge) ? shippingCharge : 0);
 
-        let overallStatus = 'pending';
-        const hasRejected = allItems.some(item => item.acceptance_status === 'rejected');
-        const hasPartial = allItems.some(item => item.acceptance_status === 'partial');
-        const allFull = allItems.every(item => item.acceptance_status === 'full');
-
-        if (hasRejected && !allItems.some(item => item.acceptance_status === 'pending')) {
-            overallStatus = 'rejected';
-        } else if (allFull) {
-            overallStatus = 'accepted';
-        } else if (hasPartial || allItems.some(item => item.acceptance_status === 'pending')) {
-            overallStatus = 'pending';
-        }
-
+        // Update the order amount for all items in this order (includes shipping)
         await connection.execute(
-            'UPDATE orders SET orderStatus = ? WHERE orderID = ?',
-            [overallStatus, orderID]
+            'UPDATE orders SET order_amount = ? WHERE orderID = ?',
+            [newOrderAmount, orderID]
         );
 
         // Recalculate payment status based on new order amount
@@ -212,7 +212,7 @@ async function updateOrderAcceptance(orderID, productID, acceptedUnits, adminNot
         const currentTotalPaid = parseFloat(paymentRows[0]?.total_paid || 0);
 
         let paymentStatus = 'not_paid';
-        if (currentTotalPaid >= newTotalOrderAmount && newTotalOrderAmount > 0) {
+        if (currentTotalPaid >= newOrderAmount && newOrderAmount > 0) {
             paymentStatus = 'paid';
         } else if (currentTotalPaid > 0) {
             paymentStatus = 'partially_paid';
@@ -223,11 +223,15 @@ async function updateOrderAcceptance(orderID, productID, acceptedUnits, adminNot
             [paymentStatus, orderID]
         );
 
+        // IMPORTANT: Do NOT change overall orderStatus here.
+        // Order status (pending/accepted/rejected) will be controlled explicitly
+        // via the /admin/:orderID/status endpoint, not inferred from item-level acceptance.
+
         await connection.commit();
         return {
             success: true,
             affectedRows: result.affectedRows,
-            newOrderAmount: newTotalOrderAmount,
+            newOrderAmount: newOrderAmount,
             paymentStatus: paymentStatus
         };
     } catch (error) {
@@ -361,21 +365,16 @@ async function getAllOrders(filters = {}) {
 }
 
 
-// Calculate total amount for an order by summing quantity * productPrice
+// Calculate total amount for an order (items + shipping)
 async function calculateOrderTotal(orderID) {
     try {
+        // order_amount is stored per row but identical for all rows of an order
         const [rows] = await db.execute(
-            'SELECT units, productPrice FROM orders WHERE orderID = ?',
+            'SELECT order_amount FROM orders WHERE orderID = ? LIMIT 1',
             [orderID]
         );
-
-        let total = 0;
-        for (const r of rows) {
-            const qty = r.units || 0;
-            const price = Number(r.productPrice || 0);
-            total += qty * price;
-        }
-        return Number(total.toFixed(2));
+        if (!rows || rows.length === 0) return 0;
+        return Number(Number(rows[0].order_amount || 0).toFixed(2));
     } catch (error) {
         throw new Error(`Error calculating order total: ${error.message}`);
     }
@@ -411,6 +410,77 @@ async function subtractOutstanding(uid, amount) {
     }
 }
 
+// Update shipping charge for an order and recompute totals
+async function updateOrderShipping(orderID, shippingCharge) {
+    const connection = await db.getConnection();
+    try {
+        await connection.beginTransaction();
+
+        const charge = Number(shippingCharge || 0);
+        if (!Number.isFinite(charge) || charge < 0) {
+            throw new Error('Invalid shipping charge');
+        }
+
+        // Recalculate items total using accepted units and final_price (fallback to pItemPrice)
+        const [items] = await connection.execute(
+            'SELECT accepted_units, final_price, pItemPrice FROM orders WHERE orderID = ?',
+            [orderID]
+        );
+        if (!items || items.length === 0) {
+            throw new Error('Order not found');
+        }
+
+        let itemsTotal = 0;
+        items.forEach((row) => {
+            const qty = parseInt(row.accepted_units || 0);
+            const price = row.final_price != null
+                ? parseFloat(row.final_price)
+                : parseFloat(row.pItemPrice || 0);
+            if (Number.isFinite(qty) && Number.isFinite(price)) {
+                itemsTotal += qty * price;
+            }
+        });
+
+        const newOrderAmount = itemsTotal + charge;
+
+        // Update shipping_charge and order_amount
+        await connection.execute(
+            'UPDATE orders SET shipping_charge = ?, order_amount = ? WHERE orderID = ?',
+            [charge, newOrderAmount, orderID]
+        );
+
+        // Recalculate payment status based on new order amount
+        const [paymentRows] = await connection.execute(
+            'SELECT SUM(paid_amount) as total_paid FROM order_payments WHERE orderID = ?',
+            [orderID]
+        );
+        const currentTotalPaid = parseFloat(paymentRows[0]?.total_paid || 0);
+
+        let paymentStatus = 'not_paid';
+        if (currentTotalPaid >= newOrderAmount && newOrderAmount > 0) {
+            paymentStatus = 'paid';
+        } else if (currentTotalPaid > 0) {
+            paymentStatus = 'partially_paid';
+        }
+
+        await connection.execute(
+            'UPDATE orders SET payment_status = ? WHERE orderID = ?',
+            [paymentStatus, orderID]
+        );
+
+        await connection.commit();
+        return {
+            success: true,
+            orderAmount: newOrderAmount,
+            paymentStatus
+        };
+    } catch (error) {
+        await connection.rollback();
+        throw new Error(`Error updating order shipping: ${error.message}`);
+    } finally {
+        connection.release();
+    }
+}
 
 // Get orders by user ID (for admin edit user page)
 async function getOrdersByUserId(uid) {
@@ -492,12 +562,9 @@ async function updateOrderPayment(orderID, paidAmount, adminUid, notes = '') {
         const totalOrderAmount = parseFloat(orderRows[0]?.order_amount || 0);
         const newPaidAmount = parseFloat(paidAmount);
 
-        // Validate paid amount
+        // Treat newPaidAmount as the amount of THIS payment (delta), not total-to-date.
         if (newPaidAmount < 0) {
             throw new Error('Paid amount cannot be negative');
-        }
-        if (newPaidAmount > totalOrderAmount) {
-            throw new Error('Paid amount cannot exceed total order amount');
         }
 
         // Get current total paid amount
@@ -506,17 +573,22 @@ async function updateOrderPayment(orderID, paidAmount, adminUid, notes = '') {
             [orderID]
         );
         const currentTotalPaid = parseFloat(paymentRows[0]?.total_paid || 0);
-        const paidDifference = newPaidAmount - currentTotalPaid;
 
-        // Insert or update payment record
-        await connection.execute(
-            'INSERT INTO order_payments (orderID, paid_amount, admin_uid, notes) VALUES (?, ?, ?, ?)',
-            [orderID, newPaidAmount, adminUid, notes]
-        );
+        // Make sure we don't exceed total order amount
+        if (currentTotalPaid + newPaidAmount > totalOrderAmount) {
+            throw new Error('Paid amount cannot exceed total order amount');
+        }
 
-        // Update payment status in orders table
-        // Calculate total accumulated payments (including the new payment)
-        const totalAccumulatedPayments = newPaidAmount; // newPaidAmount is the total amount to be paid
+        // Insert this payment as a new entry (delta)
+        if (newPaidAmount !== 0) {
+            await connection.execute(
+                'INSERT INTO order_payments (orderID, paid_amount, admin_uid, notes) VALUES (?, ?, ?, ?)',
+                [orderID, newPaidAmount, adminUid, notes]
+            );
+        }
+
+        // Update payment status in orders table based on accumulated payments
+        const totalAccumulatedPayments = currentTotalPaid + newPaidAmount;
 
         let paymentStatus = 'not_paid';
         if (totalAccumulatedPayments >= totalOrderAmount) {
@@ -530,16 +602,11 @@ async function updateOrderPayment(orderID, paidAmount, adminUid, notes = '') {
             [paymentStatus, orderID]
         );
 
-        // Update user outstanding if there's a difference
-        if (paidDifference !== 0) {
+        // Update user outstanding based on this payment
+        if (newPaidAmount !== 0) {
             const uid = orderRows[0].uid;
-            if (paidDifference > 0) {
-                // Reduce outstanding (payment received)
-                await subtractOutstanding(uid, paidDifference, connection);
-            } else {
-                // Increase outstanding (payment reversed)
-                await addOutstanding(uid, Math.abs(paidDifference), connection);
-            }
+            // Payment received -> reduce outstanding
+            await subtractOutstanding(uid, newPaidAmount, connection);
         }
 
         await connection.commit();
@@ -547,7 +614,7 @@ async function updateOrderPayment(orderID, paidAmount, adminUid, notes = '') {
             success: true,
             paidAmount: newPaidAmount,
             totalOrderAmount: totalOrderAmount,
-            outstandingChange: paidDifference
+            outstandingChange: newPaidAmount
         };
     } catch (error) {
         await connection.rollback();
@@ -963,7 +1030,8 @@ module.exports = {
     updatePaymentEntry,
     deletePaymentEntry,
     getUserStatistics,
-    getOrderStatistics
+    getOrderStatistics,
+    updateOrderShipping
 };
 
 

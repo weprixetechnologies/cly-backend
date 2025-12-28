@@ -1,4 +1,79 @@
 const authService = require('../services/authService');
+const otpService = require('../services/otpService');
+
+// Send OTP for user registration
+async function sendSignupOTP(req, res) {
+    try {
+        console.log('📧 ========================================');
+        console.log('📧 SEND SIGNUP OTP REQUEST RECEIVED');
+        console.log('📧 Request body:', { emailID: req.body.emailID, name: req.body.name });
+
+        const { emailID, name } = req.body;
+
+        // Validate required fields
+        if (!emailID) {
+            console.error('❌ Email is missing in request');
+            return res.status(400).json({
+                success: false,
+                message: 'Email is required'
+            });
+        }
+
+        console.log('📧 Calling otpService.sendOTP...');
+        const result = await otpService.sendOTP(emailID, name || 'User');
+        console.log('✅ OTP service returned:', result);
+
+        res.status(200).json(result);
+
+    } catch (error) {
+        console.error('❌ Send OTP error:', error.message);
+        console.error('❌ Error stack:', error.stack);
+        res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+}
+
+// Verify OTP for user registration
+async function verifySignupOTP(req, res) {
+    try {
+        console.log('🔐 ========================================');
+        console.log('🔐 VERIFY SIGNUP OTP REQUEST RECEIVED');
+        console.log('🔐 Request body:', { emailID: req.body.emailID, otp: req.body.otp ? '***' : undefined });
+
+        const { emailID, otp } = req.body;
+
+        // Validate required fields
+        if (!emailID || !otp) {
+            console.error('❌ Missing required fields:', { hasEmailID: !!emailID, hasOtp: !!otp });
+            return res.status(400).json({
+                success: false,
+                message: 'Email and OTP are required'
+            });
+        }
+
+        console.log('🔐 Calling otpService.verifyOTP...');
+        const result = await otpService.verifyOTP(emailID, otp);
+        console.log('🔐 OTP service returned:', { success: result.success, message: result.message });
+
+        if (!result.success) {
+            console.error('❌ OTP verification failed:', result.message);
+            return res.status(400).json(result);
+        }
+
+        console.log('✅ OTP verified successfully');
+        res.status(200).json(result);
+
+    } catch (error) {
+        console.error('❌ Verify OTP error:', error.message);
+        console.error('❌ Error stack:', error.stack);
+        res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+}
 
 // Register admin
 async function registerAdmin(req, res) {
@@ -33,10 +108,10 @@ async function registerAdmin(req, res) {
     }
 }
 
-// Register user
+// Register user (requires OTP verification first)
 async function registerUser(req, res) {
     try {
-        const { emailID, phoneNumber, name, password, gstin, device } = req.body;
+        const { emailID, phoneNumber, name, password, gstin, device, otp } = req.body;
 
         // Validate required fields
         if (!emailID || !phoneNumber || !name || !password) {
@@ -46,6 +121,25 @@ async function registerUser(req, res) {
             });
         }
 
+        // Verify OTP before registration
+        if (!otp) {
+            return res.status(400).json({
+                success: false,
+                message: 'OTP is required for registration'
+            });
+        }
+
+        // Verify OTP and delete it after successful verification
+        const otpModel = require('../models/otpModel');
+        const otpVerification = await otpModel.verifyOTP(emailID, otp, true); // true = delete after verification
+        if (!otpVerification.valid) {
+            return res.status(400).json({
+                success: false,
+                message: otpVerification.message || 'Invalid or expired OTP'
+            });
+        }
+
+        // OTP verified, proceed with registration
         const result = await authService.registerUserRole({
             emailID,
             phoneNumber,
@@ -214,6 +308,8 @@ async function getProfile(req, res) {
 }
 
 module.exports = {
+    sendSignupOTP,
+    verifySignupOTP,
     registerAdmin,
     registerUser,
     loginAdmin,

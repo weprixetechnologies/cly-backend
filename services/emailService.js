@@ -44,7 +44,7 @@ class EmailService {
         console.log('📧 Email:', email);
         console.log('📧 User:', userName);
         console.log('📧 Token:', resetToken.substring(0, 10) + '...');
-        const resetUrl = `${process.env.FRONTEND_URL || 'https://api.cursiveletters.in'}/reset-password?token=${resetToken}`;
+        const resetUrl = `${process.env.FRONTEND_URL || 'https://cursiveletters.in'}/reset-password?token=${resetToken}`;
 
         const htmlTemplate = this.generatePasswordResetTemplate(userName, resetUrl, email);
 
@@ -297,6 +297,248 @@ class EmailService {
                         <a href="#" class="social-link">Support</a>
                         <a href="#" class="social-link">Help Center</a>
                         <a href="#" class="social-link">Contact Us</a>
+                    </div>
+                    
+                    <div class="company-info">
+                        <p>© 2024 Cly App. All rights reserved.</p>
+                        <p>This email was sent to ${email}. If you have any questions, please contact us.</p>
+                    </div>
+                </div>
+            </div>
+        </body>
+        </html>
+        `;
+    }
+
+    async sendOTPEmail(email, otp, userName) {
+        console.log('📧 ========================================');
+        console.log('📧 CALLING sendOTPEmail');
+        console.log('📧 Email:', email);
+        console.log('📧 User:', userName);
+        console.log('📧 OTP:', otp);
+
+        const htmlTemplate = this.generateOTPTemplate(userName, otp, email);
+
+        const mailOptions = {
+            from: `"${process.env.COMPANY_NAME || 'Cly App'}" <${process.env.SMTP_USER || 'vishal0077@gmail.com'}>`,
+            to: email,
+            subject: 'Verify Your Email - Cly App',
+            html: htmlTemplate
+        };
+
+        console.log('📧 Attempting to send OTP email to:', email);
+
+        try {
+            const result = await this.transporter.sendMail(mailOptions);
+            console.log('✅ OTP email sent successfully!');
+            console.log('Message ID:', result.messageId);
+            console.log('Response:', result.response);
+            return { success: true, messageId: result.messageId };
+        } catch (error) {
+            console.error('❌ Error sending OTP email:');
+            console.error('Error message:', error.message);
+            console.error('Error code:', error.code);
+            console.error('Error command:', error.command);
+            console.error('Error response:', error.response);
+            console.error('Full error:', error);
+            return { success: false, error: error.message };
+        }
+    }
+
+    generateOTPTemplate(userName, otp, email = '') {
+        return `
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Verify Your Email</title>
+            <style>
+                * {
+                    margin: 0;
+                    padding: 0;
+                    box-sizing: border-box;
+                }
+                
+                body {
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                    line-height: 1.6;
+                    color: #333;
+                    background-color: #f8fafc;
+                }
+                
+                .email-container {
+                    max-width: 600px;
+                    margin: 0 auto;
+                    background-color: #ffffff;
+                    border-radius: 12px;
+                    overflow: hidden;
+                    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+                }
+                
+                .header {
+                    background: linear-gradient(135deg, #EF6A22 0%, #FF8C42 100%);
+                    padding: 40px 30px;
+                    text-align: center;
+                    color: white;
+                }
+                
+                .logo {
+                    font-size: 28px;
+                    font-weight: bold;
+                    margin-bottom: 10px;
+                    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+                }
+                
+                .header-subtitle {
+                    font-size: 16px;
+                    opacity: 0.9;
+                }
+                
+                .content {
+                    padding: 40px 30px;
+                }
+                
+                .greeting {
+                    font-size: 24px;
+                    font-weight: 600;
+                    color: #1a202c;
+                    margin-bottom: 20px;
+                }
+                
+                .message {
+                    font-size: 16px;
+                    color: #4a5568;
+                    margin-bottom: 30px;
+                    line-height: 1.7;
+                }
+                
+                .otp-container {
+                    background: linear-gradient(135deg, #EF6A22 0%, #FF8C42 100%);
+                    padding: 30px;
+                    border-radius: 12px;
+                    text-align: center;
+                    margin: 30px 0;
+                }
+                
+                .otp-label {
+                    color: white;
+                    font-size: 14px;
+                    margin-bottom: 10px;
+                    opacity: 0.9;
+                }
+                
+                .otp-code {
+                    font-size: 36px;
+                    font-weight: bold;
+                    color: white;
+                    letter-spacing: 8px;
+                    font-family: 'Courier New', monospace;
+                }
+                
+                .security-note {
+                    background-color: #f7fafc;
+                    border-left: 4px solid #4299e1;
+                    padding: 20px;
+                    margin: 30px 0;
+                    border-radius: 0 8px 8px 0;
+                }
+                
+                .security-note h3 {
+                    color: #2d3748;
+                    font-size: 16px;
+                    margin-bottom: 10px;
+                }
+                
+                .security-note p {
+                    color: #4a5568;
+                    font-size: 14px;
+                    margin: 5px 0;
+                }
+                
+                .footer {
+                    background-color: #f8fafc;
+                    padding: 30px;
+                    text-align: center;
+                    border-top: 1px solid #e2e8f0;
+                }
+                
+                .footer-text {
+                    color: #718096;
+                    font-size: 14px;
+                    margin-bottom: 15px;
+                }
+                
+                .company-info {
+                    color: #a0aec0;
+                    font-size: 12px;
+                    margin-top: 20px;
+                }
+                
+                .divider {
+                    height: 1px;
+                    background: linear-gradient(90deg, transparent, #e2e8f0, transparent);
+                    margin: 30px 0;
+                }
+                
+                @media (max-width: 600px) {
+                    .email-container {
+                        margin: 10px;
+                        border-radius: 8px;
+                    }
+                    
+                    .header, .content, .footer {
+                        padding: 20px;
+                    }
+                    
+                    .greeting {
+                        font-size: 20px;
+                    }
+                    
+                    .otp-code {
+                        font-size: 28px;
+                        letter-spacing: 4px;
+                    }
+                }
+            </style>
+        </head>
+        <body>
+            <div class="email-container">
+                <!-- Header -->
+                <div class="header">
+                    <div class="logo">CLY APP</div>
+                    <div class="header-subtitle">Email Verification</div>
+                </div>
+                
+                <!-- Content -->
+                <div class="content">
+                    <div class="greeting">Hello ${userName || 'Valued Customer'}!</div>
+                    
+                    <div class="message">
+                        Thank you for signing up with Cly App! To complete your registration, 
+                        please verify your email address using the OTP code below.
+                    </div>
+                    
+                    <div class="otp-container">
+                        <div class="otp-label">Your Verification Code</div>
+                        <div class="otp-code">${otp}</div>
+                    </div>
+                    
+                    <div class="security-note">
+                        <h3>🔒 Security Information</h3>
+                        <p>• This OTP will expire in 1 hour for your security</p>
+                        <p>• Never share this code with anyone</p>
+                        <p>• If you didn't request this code, please ignore this email</p>
+                        <p>• This code can only be used once</p>
+                    </div>
+                </div>
+                
+                <div class="divider"></div>
+                
+                <!-- Footer -->
+                <div class="footer">
+                    <div class="footer-text">
+                        Need help? Contact our support team
                     </div>
                     
                     <div class="company-info">

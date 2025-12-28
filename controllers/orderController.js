@@ -185,7 +185,7 @@ const updateOrderStatus = async (req, res) => {
 // Update order with partial acceptance
 const updateOrderAcceptance = async (req, res) => {
     try {
-        const { orderID, productID, acceptedUnits, adminNotes } = req.body;
+        const { orderID, productID, acceptedUnits, adminNotes, customPrice } = req.body;
 
         if (!orderID || !productID || acceptedUnits === undefined) {
             return res.status(400).json({
@@ -205,7 +205,8 @@ const updateOrderAcceptance = async (req, res) => {
             orderID,
             productID,
             parseInt(acceptedUnits),
-            adminNotes || ''
+            adminNotes || '',
+            customPrice !== undefined && customPrice !== null && customPrice !== '' ? parseFloat(customPrice) : null
         );
 
         if (result && result.success) {
@@ -276,6 +277,51 @@ const updateOrderPayment = async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Failed to update order payment',
+            error: error.message
+        });
+    }
+};
+
+// Update shipping charge for an order (admin)
+const updateOrderShipping = async (req, res) => {
+    try {
+        const { orderID } = req.params;
+        const { shippingCharge } = req.body || {};
+
+        if (!orderID) {
+            return res.status(400).json({
+                success: false,
+                message: "Order ID is required"
+            });
+        }
+
+        if (shippingCharge === undefined || shippingCharge === null || shippingCharge === "") {
+            return res.status(400).json({
+                success: false,
+                message: "Shipping charge is required"
+            });
+        }
+
+        const charge = parseFloat(shippingCharge);
+        if (isNaN(charge) || charge < 0) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid shipping charge"
+            });
+        }
+
+        const result = await orderModel.updateOrderShipping(orderID, charge);
+
+        return res.status(200).json({
+            success: true,
+            message: "Shipping charge updated successfully",
+            data: result
+        });
+    } catch (error) {
+        console.error("[orderController] updateOrderShipping error:", error.message);
+        return res.status(500).json({
+            success: false,
+            message: "Failed to update shipping charge",
             error: error.message
         });
     }
@@ -477,7 +523,8 @@ module.exports = {
     getOrderPayment,
     updateOrderRemarks,
     updatePaymentEntry,
-    deletePaymentEntry
+    deletePaymentEntry,
+    updateOrderShipping
 };
 
 

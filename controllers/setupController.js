@@ -183,8 +183,115 @@ const addPartialAcceptanceColumns = async (req, res) => {
     }
 };
 
+// POST /api/setup/add-custom-price-and-shipping
+// Adds final_price and shipping_charge columns to orders table
+const addCustomPriceAndShippingColumns = async (req, res) => {
+    const connection = await db.getConnection();
+    try {
+        await connection.beginTransaction();
+
+        // Add final_price column if it does not exist
+        const [finalPriceCols] = await connection.execute(
+            "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = 'cly' AND TABLE_NAME = 'orders' AND COLUMN_NAME = 'final_price'"
+        );
+
+        if (finalPriceCols.length === 0) {
+            await connection.execute(
+                "ALTER TABLE orders ADD COLUMN final_price DECIMAL(10,2) NULL DEFAULT NULL AFTER pItemPrice"
+            );
+            // Initialize final_price with existing per-item price
+            await connection.execute(
+                "UPDATE orders SET final_price = pItemPrice"
+            );
+        }
+
+        // Add shipping_charge column if it does not exist
+        const [shippingCols] = await connection.execute(
+            "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = 'cly' AND TABLE_NAME = 'orders' AND COLUMN_NAME = 'shipping_charge'"
+        );
+
+        if (shippingCols.length === 0) {
+            await connection.execute(
+                "ALTER TABLE orders ADD COLUMN shipping_charge DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER order_amount"
+            );
+        }
+
+        await connection.commit();
+
+        return res.status(200).json({
+            success: true,
+            message: 'Custom price and shipping columns added/verified successfully'
+        });
+    } catch (error) {
+        await connection.rollback();
+        console.error('[setupController] addCustomPriceAndShippingColumns error:', error.message);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to add custom price and shipping columns',
+            error: error.message
+        });
+    } finally {
+        connection.release();
+    }
+};
+
+// POST /api/setup/add-increased-status
+// Adds 'increased' value to acceptance_status ENUM
+const addIncreasedStatus = async (req, res) => {
+    const connection = await db.getConnection();
+    try {
+        await connection.beginTransaction();
+
+        // Check current ENUM values
+        const [enumInfo] = await connection.execute(
+            "SELECT COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = 'cly' AND TABLE_NAME = 'orders' AND COLUMN_NAME = 'acceptance_status'"
+        );
+
+        if (enumInfo.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'acceptance_status column not found'
+            });
+        }
+
+        const currentEnum = enumInfo[0].COLUMN_TYPE;
+        
+        // Check if 'increased' already exists in the ENUM
+        if (currentEnum.includes("'increased'")) {
+            return res.status(200).json({
+                success: true,
+                message: "'increased' status already exists in acceptance_status ENUM"
+            });
+        }
+
+        // Modify the ENUM to include 'increased'
+        await connection.execute(
+            "ALTER TABLE orders MODIFY COLUMN acceptance_status ENUM('pending', 'partial', 'full', 'rejected', 'increased') DEFAULT 'pending'"
+        );
+
+        await connection.commit();
+
+        return res.status(200).json({
+            success: true,
+            message: "'increased' status added to acceptance_status ENUM successfully"
+        });
+    } catch (error) {
+        await connection.rollback();
+        console.error('[setupController] addIncreasedStatus error:', error.message);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to add increased status',
+            error: error.message
+        });
+    } finally {
+        connection.release();
+    }
+};
+
 module.exports = {
     addOrderAmountColumn,
     addProductPriceColumn,
-    addPartialAcceptanceColumns
+    addPartialAcceptanceColumns,
+    addCustomPriceAndShippingColumns,
+    addIncreasedStatus
 };

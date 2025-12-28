@@ -148,7 +148,7 @@ router.get('/admin/:orderID', async (req, res) => {
 // Admin: update order with partial acceptance
 router.put('/admin/acceptance', async (req, res) => {
     try {
-        const { orderID, productID, acceptedUnits, adminNotes } = req.body;
+        const { orderID, productID, acceptedUnits, adminNotes, customPrice } = req.body;
 
         if (!orderID || !productID || acceptedUnits === undefined) {
             return res.status(400).json({
@@ -175,7 +175,8 @@ router.put('/admin/acceptance', async (req, res) => {
             orderID,
             productID,
             parseInt(acceptedUnits),
-            adminNotes || ''
+            adminNotes || '',
+            customPrice !== undefined && customPrice !== null && customPrice !== '' ? parseFloat(customPrice) : null
         );
 
         if (result) {
@@ -201,6 +202,9 @@ router.put('/admin/acceptance', async (req, res) => {
 
 // Update paid amount for entire order
 router.put('/admin/:orderID/payment', orderController.updateOrderPayment);
+
+// Update shipping charge for entire order
+router.put('/admin/:orderID/shipping', orderController.updateOrderShipping);
 
 // Get order payment details
 router.get('/admin/:orderID/payment', orderController.getOrderPayment);

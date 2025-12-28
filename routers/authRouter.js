@@ -2,10 +2,16 @@ const express = require('express');
 const router = express.Router();
 const authController = require('../controllers/authController');
 
+// Send OTP for user signup
+router.post('/signup/send-otp', authController.sendSignupOTP);
+
+// Verify OTP for user signup
+router.post('/signup/verify-otp', authController.verifySignupOTP);
+
 // Register admin
 router.post('/register/admin', authController.registerAdmin);
 
-// Register user
+// Register user (requires OTP verification)
 router.post('/register/user', authController.registerUser);
 
 // Login admin
