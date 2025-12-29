@@ -35,8 +35,11 @@ class InvoiceService {
 
             // Convert HTML to PDF using Puppeteer
             const browser = await puppeteer.launch({
-                headless: true,
-                args: ['--no-sandbox', '--disable-setuid-sandbox']
+                headless: "new",
+                args: [
+                    "--no-sandbox",
+                    "--disable-setuid-sandbox"
+                ]
             });
 
             const page = await browser.newPage();
