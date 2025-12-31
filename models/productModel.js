@@ -93,7 +93,7 @@ async function createProduct(productData) {
 }
 
 // Get all products with pagination
-async function getAllProducts(page = 1, limit = 10, search = '', categoryID = '', minPrice = null, maxPrice = null, outOfStock = true, status = null) {
+async function getAllProducts(page = 1, limit = 10, search = '', categoryID = '', minPrice = null, maxPrice = null, outOfStock = true, status = null, isFeatured = null) {
     try {
         // Ensure page and limit are integers
         const pageNum = parseInt(page) || 1;
@@ -146,6 +146,13 @@ async function getAllProducts(page = 1, limit = 10, search = '', categoryID = ''
             query += ` AND inventory > 0`;
         }
 
+        // Filter by isFeatured if provided (true/false)
+        if (isFeatured !== null && isFeatured !== undefined && isFeatured !== '') {
+            const isFeaturedValue = isFeatured === true || isFeatured === 'true' || isFeatured === 1 || isFeatured === '1' ? 1 : 0;
+            query += ` AND isFeatured = ?`;
+            params.push(isFeaturedValue);
+        }
+
         query += ` ORDER BY createdAt DESC LIMIT ? OFFSET ?`;
         params.push(limitNum, offset);
 
@@ -195,6 +202,13 @@ async function getAllProducts(page = 1, limit = 10, search = '', categoryID = ''
         // Filter out-of-stock products in count query if outOfStock is false
         if (outOfStock === false || outOfStock === 'false') {
             countQuery += ` AND inventory > 0`;
+        }
+
+        // Filter by isFeatured in count query if provided
+        if (isFeatured !== null && isFeatured !== undefined && isFeatured !== '') {
+            const isFeaturedValue = isFeatured === true || isFeatured === 'true' || isFeatured === 1 || isFeatured === '1' ? 1 : 0;
+            countQuery += ` AND isFeatured = ?`;
+            countParams.push(isFeaturedValue);
         }
 
         const [countResult] = await db.execute(countQuery, countParams);
@@ -575,7 +589,7 @@ async function getFeaturedProducts(limit = 20) {
 }
 
 // Get product statistics with filters
-async function getProductStats(search = '', categoryID = '', status = null) {
+async function getProductStats(search = '', categoryID = '', status = null, isFeatured = null) {
     try {
         // Build WHERE clause
         let whereClause = 'WHERE 1=1';
@@ -595,6 +609,13 @@ async function getProductStats(search = '', categoryID = '', status = null) {
         if (categoryID) {
             whereClause += ` AND categoryID = ?`;
             params.push(categoryID);
+        }
+
+        // Filter by isFeatured if provided
+        if (isFeatured !== null && isFeatured !== undefined && isFeatured !== '') {
+            const isFeaturedValue = isFeatured === true || isFeatured === 'true' || isFeatured === 1 || isFeatured === '1' ? 1 : 0;
+            whereClause += ` AND isFeatured = ?`;
+            params.push(isFeaturedValue);
         }
 
         // Get total count

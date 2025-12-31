@@ -34,17 +34,10 @@ async function sendOTP(email, userName) {
         const otp = generateOTP();
         console.log('🔐 Generated OTP:', otp);
 
-        // Calculate expiration time in JavaScript (1 hour from now)
-        const expiresAt = new Date();
-        expiresAt.setHours(expiresAt.getHours() + 1);
-        console.log('🔐 OTP expires at (backend calculated):', expiresAt.toISOString());
-        console.log('🔐 Current time (backend):', new Date().toISOString());
-        console.log('🔐 Hours until expiry: 1');
-
-        // Store OTP in database with calculated expiration time
+        // Store OTP in database
         console.log('🔐 Storing OTP in database...');
         try {
-            await otpModel.createOTP(email, otp, expiresAt);
+            await otpModel.createOTP(email, otp);
             console.log('✅ OTP stored in database');
             
             // Verify OTP was actually stored (check database directly, not using getOTPByEmail which checks expiration)
@@ -109,7 +102,7 @@ async function verifyOTP(email, otp) {
         }
 
         console.log('🔐 Verifying OTP in database...');
-        // Verify OTP (expiration check happens inside verifyOTP)
+        // Verify OTP
         // Don't delete OTP yet - it will be deleted during registration
         const result = await otpModel.verifyOTP(email, otp, false);
         console.log('🔐 OTP Model result:', result);

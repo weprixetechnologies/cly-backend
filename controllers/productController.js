@@ -118,8 +118,13 @@ const getAllProducts = async (req, res) => {
         const outOfStock = req.query.outOfStock === undefined || req.query.outOfStock === 'true' || req.query.outOfStock === true;
         // Parse status - if provided, filter by active/inactive; if not provided or 'all', show all
         const status = req.query.status && req.query.status !== 'all' ? req.query.status : null;
+        // Parse isFeatured - if provided, filter by featured/not featured; if not provided or 'all', show all
+        let isFeatured = null;
+        if (req.query.isFeatured && req.query.isFeatured !== 'all') {
+            isFeatured = req.query.isFeatured === 'true' || req.query.isFeatured === '1' || req.query.isFeatured === true || req.query.isFeatured === 1;
+        }
 
-        const result = await productModel.getAllProducts(page, limit, search, categoryID, minPrice, maxPrice, outOfStock, status);
+        const result = await productModel.getAllProducts(page, limit, search, categoryID, minPrice, maxPrice, outOfStock, status, isFeatured);
 
         res.status(200).json({
             success: true,
@@ -739,8 +744,13 @@ const getProductStats = async (req, res) => {
         const search = req.query.search || '';
         const categoryID = req.query.categoryID || '';
         const status = req.query.status && req.query.status !== 'all' ? req.query.status : null;
+        // Parse isFeatured - if provided, filter by featured/not featured; if not provided or 'all', show all
+        let isFeatured = null;
+        if (req.query.isFeatured && req.query.isFeatured !== 'all') {
+            isFeatured = req.query.isFeatured === 'true' || req.query.isFeatured === '1' || req.query.isFeatured === true || req.query.isFeatured === 1;
+        }
 
-        const stats = await productModel.getProductStats(search, categoryID, status);
+        const stats = await productModel.getProductStats(search, categoryID, status, isFeatured);
 
         res.status(200).json({
             success: true,

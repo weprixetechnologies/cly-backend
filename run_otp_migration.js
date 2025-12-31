@@ -20,10 +20,9 @@ async function runOTPMigration() {
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 email VARCHAR(255) NOT NULL,
                 otp VARCHAR(6) NOT NULL,
-                expiresAt DATETIME NOT NULL,
+                expiresAt DATETIME NULL,
                 createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                INDEX idx_email (email),
-                INDEX idx_expiresAt (expiresAt)
+                INDEX idx_email (email)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
         `;
 

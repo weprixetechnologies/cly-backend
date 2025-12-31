@@ -1,13 +1,11 @@
 const db = require('../utils/dbconnect');
 
 // Create OTP record
-async function createOTP(email, otp, expiresAt) {
+async function createOTP(email, otp) {
     try {
         console.log('💾 OTP Model - createOTP called');
         console.log('💾 Email:', email);
         console.log('💾 OTP:', otp);
-        console.log('💾 ExpiresAt (Date object):', expiresAt);
-        console.log('💾 ExpiresAt (ISO):', expiresAt.toISOString());
 
         // Delete any existing OTP for this email first
         console.log('💾 Deleting existing OTPs for email...');
@@ -16,27 +14,15 @@ async function createOTP(email, otp, expiresAt) {
             [email]
         );
 
-        // Format expiresAt as MySQL DATETIME (YYYY-MM-DD HH:MM:SS)
-        // Convert Date object to MySQL DATETIME format
-        const year = expiresAt.getFullYear();
-        const month = String(expiresAt.getMonth() + 1).padStart(2, '0');
-        const day = String(expiresAt.getDate()).padStart(2, '0');
-        const hours = String(expiresAt.getHours()).padStart(2, '0');
-        const minutes = String(expiresAt.getMinutes()).padStart(2, '0');
-        const seconds = String(expiresAt.getSeconds()).padStart(2, '0');
-        const formattedExpiresAt = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
-
-        console.log('💾 Formatted expiresAt (MySQL DATETIME):', formattedExpiresAt);
-
         console.log('💾 Inserting new OTP into database...');
         // Ensure OTP is stored as string
         const otpString = String(otp).trim();
         console.log('💾 OTP to store (as string):', otpString);
 
-        // Insert OTP with calculated expiration time
+        // Insert OTP (expiresAt is nullable, so we can pass NULL)
         const [result] = await db.execute(
-            'INSERT INTO signup_otps (email, otp, expiresAt, createdAt) VALUES (?, ?, ?, NOW())',
-            [email, otpString, formattedExpiresAt]
+            'INSERT INTO signup_otps (email, otp, expiresAt, createdAt) VALUES (?, ?, NULL, NOW())',
+            [email, otpString]
         );
         console.log('✅ OTP inserted successfully');
         console.log('💾 Insert result:', { insertId: result.insertId, affectedRows: result.affectedRows });
@@ -49,13 +35,13 @@ async function createOTP(email, otp, expiresAt) {
     }
 }
 
-// Get OTP by email (without expiration check - expiration checked in backend)
+// Get OTP by email
 async function getOTPByEmail(email) {
     try {
         console.log('💾 OTP Model - getOTPByEmail called');
         console.log('💾 Email:', email);
 
-        // Get the OTP record without expiration check (we'll check in backend)
+        // Get the OTP record
         const [rows] = await db.execute(
             'SELECT * FROM signup_otps WHERE email = ? ORDER BY createdAt DESC LIMIT 1',
             [email]
@@ -73,7 +59,6 @@ async function getOTPByEmail(email) {
             id: otpRecord.id,
             email: otpRecord.email,
             otp: otpRecord.otp ? '***' : 'missing',
-            expiresAt: otpRecord.expiresAt,
             createdAt: otpRecord.createdAt
         });
 
@@ -100,33 +85,6 @@ async function verifyOTP(email, otp, deleteAfterVerification = false) {
         if (!otpRecord) {
             console.error('❌ OTP not found for email:', email);
             return { valid: false, message: 'OTP not found' };
-        }
-
-        // Check expiration at backend level using JavaScript Date
-        const expiresAt = new Date(otpRecord.expiresAt);
-        const now = new Date();
-        const timeDifference = expiresAt.getTime() - now.getTime();
-        const minutesRemaining = Math.floor(timeDifference / (1000 * 60));
-        const secondsRemaining = Math.floor(timeDifference / 1000);
-
-        console.log('💾 Expiration check (Backend calculation):');
-        console.log('  ExpiresAt (from DB):', otpRecord.expiresAt);
-        console.log('  ExpiresAt (parsed Date):', expiresAt.toISOString());
-        console.log('  Current time (backend):', now.toISOString());
-        console.log('  Time difference (ms):', timeDifference);
-        console.log('  Seconds remaining:', secondsRemaining);
-        console.log('  Minutes remaining:', minutesRemaining);
-        console.log('  Is expired?', timeDifference < 0);
-
-        if (timeDifference < 0) {
-            console.log('❌ OTP has expired');
-            // Delete expired OTP
-            await db.execute(
-                'DELETE FROM signup_otps WHERE id = ?',
-                [otpRecord.id]
-            );
-            console.log('💾 Deleted expired OTP from database');
-            return { valid: false, message: 'OTP has expired' };
         }
 
         console.log('💾 Comparing OTPs...');
@@ -177,25 +135,15 @@ async function deleteOTP(email) {
     }
 }
 
-// Clean up expired OTPs
+// Clean up old OTPs (optional cleanup function - no expiry check)
 async function cleanupExpiredOTPs() {
     try {
-        // Get all OTPs and check expiration in backend
-        const [rows] = await db.execute('SELECT * FROM signup_otps');
-        const now = new Date();
-        let deletedCount = 0;
-
-        for (const row of rows) {
-            const expiresAt = new Date(row.expiresAt);
-            if (expiresAt.getTime() < now.getTime()) {
-                await db.execute('DELETE FROM signup_otps WHERE id = ?', [row.id]);
-                deletedCount++;
-            }
-        }
-
-        return deletedCount;
+        // This function is kept for compatibility but no longer checks expiry
+        // OTPs are now deleted after successful verification or when new OTP is created for same email
+        console.log('💾 Cleanup function called (no expiry check - OTPs don\'t expire)');
+        return 0;
     } catch (error) {
-        throw new Error(`Error cleaning up expired OTPs: ${error.message}`);
+        throw new Error(`Error cleaning up OTPs: ${error.message}`);
     }
 }
 

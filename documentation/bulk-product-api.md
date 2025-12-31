@@ -224,7 +224,7 @@ The API maps incoming fields to database columns as follows:
 
 #### cURL
 ```bash
-curl -X POST https://api.cursiveletters.in/api/products/bulk-add \
+curl -X POST http://localhost:9878/api/products/bulk-add \
   -H "Content-Type: application/json" \
   -d '{
     "supplier_token": "",
@@ -247,7 +247,7 @@ curl -X POST https://api.cursiveletters.in/api/products/bulk-add \
 
 #### JavaScript (fetch)
 ```javascript
-const response = await fetch('https://api.cursiveletters.in/api/products/bulk-add', {
+const response = await fetch('http://localhost:9878/api/products/bulk-add', {
     method: 'POST',
     headers: {
         'Content-Type': 'application/json',
