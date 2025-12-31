@@ -7,9 +7,9 @@ async function removeOTPExpiry() {
         // Database connection
         connection = await mysql.createConnection({
             host: process.env.DB_HOST || '127.0.0.1',
-            user: process.env.DB_USER || 'root',
-            password: process.env.DB_PASSWORD || 'rseditz@222',
-            database: process.env.DB_NAME || 'cly'
+            user: process.env.DB_USER || 'adminuser',
+            password: process.env.DB_PASSWORD || 'Vishal@13241',
+            database: process.env.DB_NAME || 'clydb'
         });
 
         console.log('Connected to database successfully');
