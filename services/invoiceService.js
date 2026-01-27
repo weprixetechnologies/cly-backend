@@ -720,7 +720,7 @@ class InvoiceService {
                 </div>
                 <div class="detail-row">
                     <span class="detail-label">Payment Mode:</span>
-                    <span class="detail-value">${orderData.paymentMode}</span>
+                    <span class="detail-value">Payment Advance</span>
                 </div>
                 <div class="detail-row">
                     <span class="detail-label">Invoice Amount:</span>
