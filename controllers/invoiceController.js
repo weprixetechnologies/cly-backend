@@ -62,7 +62,46 @@ const downloadInvoice = async (req, res) => {
     }
 };
 
+// Generate and download shipping label as PDF (using PDFKit layout)
+const downloadShippingLabel = async (req, res) => {
+    try {
+        const { orderID } = req.params;
+        const {
+            senderName,
+            senderAddressLine1,
+            senderAddressLine2,
+            senderContact
+        } = req.body || {};
+
+        if (!orderID) {
+            return res.status(400).json({
+                success: false,
+                message: 'Order ID is required'
+            });
+        }
+
+        const pdfBuffer = await invoiceService.generateShippingLabelPDF(orderID, {
+            senderName,
+            senderAddressLine1,
+            senderAddressLine2,
+            senderContact
+        });
+
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="shipping-label-${orderID}.pdf"`);
+        res.send(pdfBuffer);
+    } catch (error) {
+        console.error('[InvoiceController] Error downloading shipping label:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to download shipping label',
+            error: error.message
+        });
+    }
+};
+
 module.exports = {
     generateInvoice,
-    downloadInvoice
+    downloadInvoice,
+    downloadShippingLabel
 };

@@ -2,6 +2,7 @@ const db = require('../utils/dbconnect');
 const puppeteer = require('puppeteer');
 const fs = require('fs');
 const path = require('path');
+const PDFDocument = require('pdfkit');
 
 class InvoiceService {
     constructor() {
@@ -68,6 +69,47 @@ class InvoiceService {
         } catch (error) {
             throw new Error(`PDF generation failed: ${error.message}`);
         }
+    }
+
+    /**
+     * Generate a SHIPPING LABEL PDF for a given order using PDFKit.
+     * This reuses the visual language of the invoice PDF but strips all pricing.
+     * Sender details are provided per-request via senderInfo and are not persisted.
+     */
+    async generateShippingLabelPDF(orderID, senderInfo = {}) {
+        const orderData = await this.getOrderData(orderID);
+        if (!orderData || orderData.length === 0) {
+            throw new Error('Order not found');
+        }
+
+        const firstOrder = orderData[0];
+        const items = orderData;
+
+        const doc = new PDFDocument({
+            size: 'A4',
+            margins: { top: 20, right: 15, bottom: 20, left: 15 }
+        });
+
+        const chunks = [];
+
+        return await new Promise((resolve, reject) => {
+            doc.on('data', (chunk) => chunks.push(chunk));
+            doc.on('end', () => resolve(Buffer.concat(chunks)));
+            doc.on('error', (err) => reject(err));
+
+            this.generateShippingLabelPDFContent(doc, {
+                orderData: firstOrder,
+                items,
+                sender: {
+                    name: senderInfo.senderName || '',
+                    addressLine1: senderInfo.senderAddressLine1 || '',
+                    addressLine2: senderInfo.senderAddressLine2 || '',
+                    contact: senderInfo.senderContact || ''
+                }
+            });
+
+            doc.end();
+        });
     }
 
     generateInvoicePDFContentNew(doc, { invoiceNumber, orderData, items, itemTotal, shipping, balanceDue, totalPaid, remainingAmount, paymentData }) {
@@ -290,6 +332,110 @@ class InvoiceService {
         doc.restore();
     }
 
+    /**
+     * Shipping-label specific info boxes: left = Sender Details, right = Ship To.
+     * Mirrors the invoice layout styling but omits monetary values.
+     */
+    renderShippingInfoBoxes(doc, x, y, width, { orderData, sender }) {
+        const gap = 20;
+        const boxWidth = (width - gap) / 2;
+        const boxHeight = 160;
+
+        // Left box - Sender Details
+        doc.save()
+            .strokeColor(this.colors.border)
+            .lineWidth(1.5)
+            .roundedRect(x, y, boxWidth, boxHeight, 6)
+            .stroke();
+
+        doc.fontSize(12)
+            .font('Helvetica-Bold')
+            .fillColor(this.colors.text)
+            .text('Sender Details', x + 15, y + 15);
+
+        let ly = y + 38;
+        const senderRows = [
+            ['Name:', sender.name || this.companyInfo.name || '-'],
+            ['Contact:', sender.contact || '-'],
+            ['Address:', sender.addressLine1 || (this.companyInfo.address.line1 || '-')],
+        ];
+
+        if (sender.addressLine2) {
+            senderRows.push(['', sender.addressLine2]);
+        }
+
+        doc.fontSize(10);
+        senderRows.forEach(([label, value]) => {
+            if (label) {
+                doc.fillColor(this.colors.secondary)
+                    .font('Helvetica-Bold')
+                    .text(label, x + 15, ly, { width: 70, continued: false });
+
+                doc.fillColor(this.colors.text)
+                    .font('Helvetica')
+                    .text(value, x + 90, ly, { width: boxWidth - 105 });
+            } else {
+                doc.fillColor(this.colors.text)
+                    .font('Helvetica')
+                    .text(value, x + 90, ly, { width: boxWidth - 105 });
+            }
+            ly += 16;
+        });
+
+        // Right box - Ship To
+        const rx = x + boxWidth + gap;
+        doc.strokeColor(this.colors.border)
+            .lineWidth(1.5)
+            .roundedRect(rx, y, boxWidth, boxHeight, 6)
+            .stroke();
+
+        doc.fontSize(12)
+            .font('Helvetica-Bold')
+            .fillColor(this.colors.text)
+            .text('Ship To', rx + 15, y + 15);
+
+        let ry = y + 38;
+        const customerRows = [
+            ['Customer:', orderData.userName || 'Unknown'],
+            ['UID:', orderData.uid]
+        ];
+
+        if (orderData.addressName) {
+            customerRows.push(
+                ['Name:', orderData.addressName],
+                ['Phone:', orderData.addressPhone || '-'],
+                ['Address:', orderData.addressLine1 || '-']
+            );
+            if (orderData.addressLine2) {
+                customerRows.push(['', orderData.addressLine2]);
+            }
+            const location = `${orderData.addressCity || ''}, ${orderData.addressState || ''} ${orderData.addressPincode || ''}`.trim();
+            if (location) {
+                customerRows.push(['', location]);
+            }
+        }
+
+        doc.fontSize(10);
+        customerRows.forEach(([label, value]) => {
+            if (label) {
+                doc.fillColor(this.colors.secondary)
+                    .font('Helvetica-Bold')
+                    .text(label, rx + 15, ry, { width: 70, continued: false });
+
+                doc.fillColor(this.colors.text)
+                    .font('Helvetica')
+                    .text(value, rx + 90, ry, { width: boxWidth - 105 });
+            } else {
+                doc.fillColor(this.colors.text)
+                    .font('Helvetica')
+                    .text(value, rx + 90, ry, { width: boxWidth - 105 });
+            }
+            ry += 16;
+        });
+
+        doc.restore();
+    }
+
     renderItemsTable(doc, x, y, width, items, ensureSpace) {
         let currentY = y;
 
@@ -373,6 +519,95 @@ class InvoiceService {
                 String(accQty),
                 `₹${unitPrice.toFixed(2)}`,
                 `₹${total.toFixed(2)}`
+            ];
+
+            values.forEach((val, i) => {
+                doc.text(val, colX, currentY + 8, {
+                    width: cols[i].w - 8,
+                    align: cols[i].align
+                });
+                colX += cols[i].w;
+            });
+
+            currentY += rowHeight;
+        });
+
+        return currentY;
+    }
+
+    /**
+     * Shipping-label specific items table: same visual style, but without any pricing columns.
+     */
+    renderShippingItemsTable(doc, x, y, width, items, ensureSpace) {
+        let currentY = y;
+
+        const cols = [
+            { label: '#', w: 35, align: 'center' },
+            { label: 'Item Description', w: 260, align: 'left' },
+            { label: 'Qty', w: 90, align: 'right' }
+        ];
+
+        const renderTableHeader = (yPos) => {
+            doc.save()
+                .fillColor(this.colors.lightGray)
+                .rect(x, yPos, width, 26)
+                .fill();
+
+            doc.strokeColor(this.colors.border)
+                .lineWidth(1)
+                .rect(x, yPos, width, 26)
+                .stroke();
+
+            let colX = x + 8;
+            doc.fontSize(10)
+                .font('Helvetica-Bold')
+                .fillColor(this.colors.text);
+
+            cols.forEach(col => {
+                doc.text(col.label, colX, yPos + 8, {
+                    width: col.w - 8,
+                    align: col.align
+                });
+                colX += col.w;
+            });
+
+            doc.restore();
+            return yPos + 26;
+        };
+
+        currentY = renderTableHeader(currentY);
+
+        items.forEach((item, idx) => {
+            if (ensureSpace(30)) {
+                currentY = doc.page.margins.top;
+                currentY = renderTableHeader(currentY);
+            }
+
+            const accQty = Number(item.accepted_units || 0);
+
+            const rowHeight = 26;
+
+            // Alternate row background
+            if (idx % 2 === 0) {
+                doc.fillColor('#fafafa')
+                    .rect(x, currentY, width, rowHeight)
+                    .fill();
+            }
+
+            doc.strokeColor(this.colors.border)
+                .lineWidth(0.5)
+                .rect(x, currentY, width, rowHeight)
+                .stroke();
+
+            let colX = x + 8;
+            doc.fontSize(9)
+                .font('Helvetica')
+                .fillColor(this.colors.text);
+
+            const values = [
+                String(idx + 1),
+                item.productName || 'Unknown Product',
+                String(accQty)
             ];
 
             values.forEach((val, i) => {
@@ -538,6 +773,66 @@ class InvoiceService {
                 y,
                 { width, align: 'center' }
             );
+    }
+
+    /**
+     * Layout builder for SHIPPING LABEL PDF.
+     * Reuses header and structural layout from the invoice, but:
+     * - Title is "SHIPPING LABEL"
+     * - Info boxes are Sender Details / Ship To
+     * - Items table has NO pricing columns
+     * - No payment history or summary is rendered
+     */
+    generateShippingLabelPDFContent(doc, { orderData, items, sender }) {
+        const pageWidth = doc.page.width;
+        const pageHeight = doc.page.height;
+        const contentWidth = pageWidth - doc.page.margins.left - doc.page.margins.right;
+        const startX = doc.page.margins.left;
+        let cursorY = doc.page.margins.top;
+
+        const ensureSpace = (needed = 50) => {
+            if (cursorY + needed > pageHeight - doc.page.margins.bottom) {
+                doc.addPage();
+                cursorY = doc.page.margins.top;
+                return true;
+            }
+            return false;
+        };
+        const advance = (dy = 10) => (cursorY += dy);
+
+        // === HEADER ===
+        ensureSpace(100);
+        this.renderHeader(doc, startX, cursorY, contentWidth);
+        advance(100);
+
+        // === TITLE ===
+        ensureSpace(40);
+        doc.fontSize(24)
+            .font('Helvetica-Bold')
+            .fillColor(this.colors.primary)
+            .text('SHIPPING LABEL', startX, cursorY);
+
+        advance(30);
+        doc.moveTo(startX, cursorY)
+            .lineTo(startX + contentWidth, cursorY)
+            .strokeColor(this.colors.primary)
+            .lineWidth(2)
+            .stroke();
+
+        advance(25);
+
+        // === SENDER / SHIP TO BOXES ===
+        ensureSpace(170);
+        this.renderShippingInfoBoxes(doc, startX, cursorY, contentWidth, {
+            orderData,
+            sender
+        });
+        advance(170);
+
+        // === ITEMS TABLE (no pricing) ===
+        ensureSpace(60);
+        cursorY = this.renderShippingItemsTable(doc, startX, cursorY, contentWidth, items, ensureSpace);
+        advance(30);
     }
 
     generateInvoicePDFContent(doc, { invoiceNumber, orderData, items, itemTotal, shipping, balanceDue, totalPaid, remainingAmount, paymentData }) {

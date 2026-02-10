@@ -123,3 +123,14 @@ CREATE TABLE visitorData (
     INDEX idx_ip (ip)
 );
 
+<!-- -- HOMEPAGE VIDEOS TABLE -->
+CREATE TABLE homepageVideos (
+    videoID     INT AUTO_INCREMENT PRIMARY KEY,
+    title       VARCHAR(255),
+    videoUrl    TEXT NOT NULL,
+    isActive    TINYINT(1) DEFAULT 1,
+    sortOrder   INT DEFAULT 0,
+    createdAt   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updatedAt   TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
