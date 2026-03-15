@@ -85,6 +85,21 @@ class InvoiceService {
         const firstOrder = orderData[0];
         const items = orderData;
 
+        // Normalize sender info; treat placeholder values like "1" or empty as missing
+        const normalize = (value, fallback = '') => {
+            if (value === undefined || value === null) return fallback;
+            const str = String(value).trim();
+            if (!str || str === '1') return fallback;
+            return str;
+        };
+
+        const sender = {
+            name: normalize(senderInfo.senderName, this.companyInfo.name || ''),
+            addressLine1: normalize(senderInfo.senderAddressLine1, this.companyInfo.address.line1 || ''),
+            addressLine2: normalize(senderInfo.senderAddressLine2, this.companyInfo.address.line2 || ''),
+            contact: normalize(senderInfo.senderContact, '')
+        };
+
         const doc = new PDFDocument({
             size: 'A4',
             margins: { top: 20, right: 15, bottom: 20, left: 15 }
@@ -100,12 +115,7 @@ class InvoiceService {
             this.generateShippingLabelPDFContent(doc, {
                 orderData: firstOrder,
                 items,
-                sender: {
-                    name: senderInfo.senderName || '',
-                    addressLine1: senderInfo.senderAddressLine1 || '',
-                    addressLine2: senderInfo.senderAddressLine2 || '',
-                    contact: senderInfo.senderContact || ''
-                }
+                sender
             });
 
             doc.end();
@@ -119,10 +129,13 @@ class InvoiceService {
         const startX = doc.page.margins.left;
         let cursorY = doc.page.margins.top;
 
-        const ensureSpace = (needed = 50) => {
-            if (cursorY + needed > pageHeight - doc.page.margins.bottom) {
+        const ensureSpace = (needed = 50, customY = null) => {
+            const checkY = customY !== null ? customY : cursorY;
+            if (checkY + needed > pageHeight - doc.page.margins.bottom) {
                 doc.addPage();
-                cursorY = doc.page.margins.top;
+                if (customY === null) {
+                    cursorY = doc.page.margins.top;
+                }
                 return true;
             }
             return false;
@@ -151,15 +164,14 @@ class InvoiceService {
         advance(25);
 
         // === INFO BOXES ===
-        ensureSpace(170);
-        this.renderInfoBoxes(doc, startX, cursorY, contentWidth, {
+        const infoBoxesHeight = this.renderInfoBoxes(doc, startX, cursorY, contentWidth, {
             invoiceNumber,
             orderData,
             balanceDue,
             totalPaid,
             remainingAmount
-        });
-        advance(170);
+        }, ensureSpace);
+        advance(infoBoxesHeight || 170);
 
         // === ITEMS TABLE ===
         ensureSpace(60);
@@ -238,10 +250,59 @@ class InvoiceService {
         doc.restore();
     }
 
-    renderInfoBoxes(doc, x, y, width, { invoiceNumber, orderData, balanceDue, totalPaid, remainingAmount }) {
+    renderInfoBoxes(doc, x, y, width, { invoiceNumber, orderData, balanceDue, totalPaid, remainingAmount }, ensureSpace = null) {
         const gap = 20;
         const boxWidth = (width - gap) / 2;
-        const boxHeight = 160;
+
+        const rows = [
+            ['Invoice No:', this._formatInvoiceNumber(orderData.orderID)],
+            ['Invoice Date:', new Date(orderData.createdAt).toLocaleDateString('en-IN')],
+            ['Order ID:', `#${orderData.orderID}`],
+            ['Payment Mode:', orderData.paymentMode || '-'],
+            ['Invoice Amount:', `₹${balanceDue.toFixed(2)}`],
+            ['Amount Paid:', `₹${totalPaid.toFixed(2)}`],
+            ['Remaining:', `₹${remainingAmount.toFixed(2)}`]
+        ];
+
+        const customerRows = [
+            ['Customer:', orderData.userName || 'Unknown'],
+            ['UID:', orderData.uid]
+        ];
+
+        if (orderData.addressName) {
+            customerRows.push(
+                ['Name:', orderData.addressName],
+                ['Phone:', orderData.addressPhone || '-'],
+                ['Address:', orderData.addressLine1 || '-']
+            );
+            if (orderData.addressLine2) {
+                customerRows.push(['', orderData.addressLine2]);
+            }
+            const location = `${orderData.addressCity || ''}, ${orderData.addressState || ''} ${orderData.addressPincode || ''}`.trim();
+            if (location) {
+                customerRows.push(['', location]);
+            }
+        }
+
+        doc.fontSize(10).font('Helvetica');
+        const calculateRowHeight = (value, textWidth) => {
+            const h = doc.heightOfString(value || '', { width: textWidth });
+            return Math.max(16, h + 4);
+        };
+
+        let leftHeight = 38;
+        const leftRowHeights = rows.map(([_, val]) => calculateRowHeight(val, boxWidth - 125));
+        leftHeight += leftRowHeights.reduce((a, b) => a + b, 0);
+
+        let rightHeight = 38;
+        const rightRowHeights = customerRows.map(([_, val]) => calculateRowHeight(val, boxWidth - 105));
+        rightHeight += rightRowHeights.reduce((a, b) => a + b, 0);
+
+        const boxHeight = Math.max(160, leftHeight + 10, rightHeight + 10);
+
+        if (ensureSpace && ensureSpace(boxHeight)) {
+            y = doc.page.margins.top;
+        }
 
         // Left box
         doc.save()
@@ -256,18 +317,8 @@ class InvoiceService {
             .text('Invoice Details', x + 15, y + 15);
 
         let ly = y + 38;
-        const rows = [
-            ['Invoice No:', this._formatInvoiceNumber(orderData.orderID)],
-            ['Invoice Date:', new Date(orderData.createdAt).toLocaleDateString('en-IN')],
-            ['Order ID:', `#${orderData.orderID}`],
-            ['Payment Mode:', orderData.paymentMode || '-'],
-            ['Invoice Amount:', `₹${balanceDue.toFixed(2)}`],
-            ['Amount Paid:', `₹${totalPaid.toFixed(2)}`],
-            ['Remaining:', `₹${remainingAmount.toFixed(2)}`]
-        ];
-
         doc.fontSize(10);
-        rows.forEach(([label, value]) => {
+        rows.forEach(([label, value], idx) => {
             doc.fillColor(this.colors.secondary)
                 .font('Helvetica-Bold')
                 .text(label, x + 15, ly, { width: 90, continued: false });
@@ -275,7 +326,7 @@ class InvoiceService {
             doc.fillColor(this.colors.text)
                 .font('Helvetica')
                 .text(value, x + 110, ly, { width: boxWidth - 125 });
-            ly += 16;
+            ly += leftRowHeights[idx];
         });
 
         // Right box
@@ -291,6 +342,41 @@ class InvoiceService {
             .text('Bill To / Ship To', rx + 15, y + 15);
 
         let ry = y + 38;
+        doc.fontSize(10);
+        customerRows.forEach(([label, value], idx) => {
+            if (label) {
+                doc.fillColor(this.colors.secondary)
+                    .font('Helvetica-Bold')
+                    .text(label, rx + 15, ry, { width: 70, continued: false });
+            }
+            doc.fillColor(this.colors.text)
+                .font('Helvetica')
+                .text(value, rx + 90, ry, { width: boxWidth - 105 });
+            ry += rightRowHeights[idx];
+        });
+
+        doc.restore();
+        return boxHeight;
+    }
+
+    /**
+     * Shipping-label specific info boxes: left = Sender Details, right = Ship To.
+     * Mirrors the invoice layout styling but omits monetary values.
+     */
+    renderShippingInfoBoxes(doc, x, y, width, { orderData, sender }, ensureSpace = null) {
+        const gap = 20;
+        const boxWidth = (width - gap) / 2;
+
+        const senderRows = [
+            ['Name:', sender.name || this.companyInfo.name || '-'],
+            ['Contact:', sender.contact || '-'],
+            ['Address:', sender.addressLine1 || (this.companyInfo.address.line1 || '-')],
+        ];
+
+        if (sender.addressLine2) {
+            senderRows.push(['', sender.addressLine2]);
+        }
+
         const customerRows = [
             ['Customer:', orderData.userName || 'Unknown'],
             ['UID:', orderData.uid]
@@ -311,35 +397,25 @@ class InvoiceService {
             }
         }
 
-        doc.fontSize(10);
-        customerRows.forEach(([label, value]) => {
-            if (label) {
-                doc.fillColor(this.colors.secondary)
-                    .font('Helvetica-Bold')
-                    .text(label, rx + 15, ry, { width: 70, continued: false });
+        doc.fontSize(10).font('Helvetica');
+        const calculateRowHeight = (value, textWidth) => {
+            const h = doc.heightOfString(value || '', { width: textWidth });
+            return Math.max(16, h + 4);
+        };
 
-                doc.fillColor(this.colors.text)
-                    .font('Helvetica')
-                    .text(value, rx + 90, ry, { width: boxWidth - 105 });
-            } else {
-                doc.fillColor(this.colors.text)
-                    .font('Helvetica')
-                    .text(value, rx + 90, ry, { width: boxWidth - 105 });
-            }
-            ry += 16;
-        });
+        let leftHeight = 38;
+        const leftRowHeights = senderRows.map(([_, val]) => calculateRowHeight(val, boxWidth - 105));
+        leftHeight += leftRowHeights.reduce((a, b) => a + b, 0);
 
-        doc.restore();
-    }
+        let rightHeight = 38;
+        const rightRowHeights = customerRows.map(([_, val]) => calculateRowHeight(val, boxWidth - 105));
+        rightHeight += rightRowHeights.reduce((a, b) => a + b, 0);
 
-    /**
-     * Shipping-label specific info boxes: left = Sender Details, right = Ship To.
-     * Mirrors the invoice layout styling but omits monetary values.
-     */
-    renderShippingInfoBoxes(doc, x, y, width, { orderData, sender }) {
-        const gap = 20;
-        const boxWidth = (width - gap) / 2;
-        const boxHeight = 160;
+        const boxHeight = Math.max(160, leftHeight + 10, rightHeight + 10);
+
+        if (ensureSpace && ensureSpace(boxHeight)) {
+            y = doc.page.margins.top;
+        }
 
         // Left box - Sender Details
         doc.save()
@@ -354,32 +430,17 @@ class InvoiceService {
             .text('Sender Details', x + 15, y + 15);
 
         let ly = y + 38;
-        const senderRows = [
-            ['Name:', sender.name || this.companyInfo.name || '-'],
-            ['Contact:', sender.contact || '-'],
-            ['Address:', sender.addressLine1 || (this.companyInfo.address.line1 || '-')],
-        ];
-
-        if (sender.addressLine2) {
-            senderRows.push(['', sender.addressLine2]);
-        }
-
         doc.fontSize(10);
-        senderRows.forEach(([label, value]) => {
+        senderRows.forEach(([label, value], idx) => {
             if (label) {
                 doc.fillColor(this.colors.secondary)
                     .font('Helvetica-Bold')
                     .text(label, x + 15, ly, { width: 70, continued: false });
-
-                doc.fillColor(this.colors.text)
-                    .font('Helvetica')
-                    .text(value, x + 90, ly, { width: boxWidth - 105 });
-            } else {
-                doc.fillColor(this.colors.text)
-                    .font('Helvetica')
-                    .text(value, x + 90, ly, { width: boxWidth - 105 });
             }
-            ly += 16;
+            doc.fillColor(this.colors.text)
+                .font('Helvetica')
+                .text(value, x + 90, ly, { width: boxWidth - 105 });
+            ly += leftRowHeights[idx];
         });
 
         // Right box - Ship To
@@ -395,45 +456,21 @@ class InvoiceService {
             .text('Ship To', rx + 15, y + 15);
 
         let ry = y + 38;
-        const customerRows = [
-            ['Customer:', orderData.userName || 'Unknown'],
-            ['UID:', orderData.uid]
-        ];
-
-        if (orderData.addressName) {
-            customerRows.push(
-                ['Name:', orderData.addressName],
-                ['Phone:', orderData.addressPhone || '-'],
-                ['Address:', orderData.addressLine1 || '-']
-            );
-            if (orderData.addressLine2) {
-                customerRows.push(['', orderData.addressLine2]);
-            }
-            const location = `${orderData.addressCity || ''}, ${orderData.addressState || ''} ${orderData.addressPincode || ''}`.trim();
-            if (location) {
-                customerRows.push(['', location]);
-            }
-        }
-
         doc.fontSize(10);
-        customerRows.forEach(([label, value]) => {
+        customerRows.forEach(([label, value], idx) => {
             if (label) {
                 doc.fillColor(this.colors.secondary)
                     .font('Helvetica-Bold')
                     .text(label, rx + 15, ry, { width: 70, continued: false });
-
-                doc.fillColor(this.colors.text)
-                    .font('Helvetica')
-                    .text(value, rx + 90, ry, { width: boxWidth - 105 });
-            } else {
-                doc.fillColor(this.colors.text)
-                    .font('Helvetica')
-                    .text(value, rx + 90, ry, { width: boxWidth - 105 });
             }
-            ry += 16;
+            doc.fillColor(this.colors.text)
+                .font('Helvetica')
+                .text(value, rx + 90, ry, { width: boxWidth - 105 });
+            ry += rightRowHeights[idx];
         });
 
         doc.restore();
+        return boxHeight;
     }
 
     renderItemsTable(doc, x, y, width, items, ensureSpace) {
@@ -479,13 +516,6 @@ class InvoiceService {
         currentY = renderTableHeader(currentY);
 
         items.forEach((item, idx) => {
-            if (ensureSpace(30)) {
-                currentY = doc.page.margins.top;
-                currentY = renderTableHeader(currentY);
-            }
-
-            const reqQty = Number(item.requested_units || item.units || 0);
-            const accQty = Number(item.accepted_units || 0);
             const unitPrice = Number(
                 item.final_price != null
                     ? item.final_price
@@ -493,7 +523,14 @@ class InvoiceService {
             );
             const total = accQty * unitPrice;
 
-            const rowHeight = 26;
+            const descText = item.productName || 'Unknown Product';
+            const descHeight = doc.heightOfString(descText, { width: cols[1].w - 8 });
+            const rowHeight = Math.max(26, descHeight + 10);
+
+            if (ensureSpace(rowHeight, currentY)) {
+                currentY = doc.page.margins.top;
+                currentY = renderTableHeader(currentY);
+            }
 
             // Alternate row background
             if (idx % 2 === 0) {
@@ -507,20 +544,20 @@ class InvoiceService {
                 .rect(x, currentY, width, rowHeight)
                 .stroke();
 
-            let colX = x + 8;
             doc.fontSize(9)
                 .font('Helvetica')
                 .fillColor(this.colors.text);
 
             const values = [
                 String(idx + 1),
-                item.productName || 'Unknown Product',
+                descText,
                 String(reqQty),
                 String(accQty),
                 `₹${unitPrice.toFixed(2)}`,
                 `₹${total.toFixed(2)}`
             ];
 
+            let colX = x + 8;
             values.forEach((val, i) => {
                 doc.text(val, colX, currentY + 8, {
                     width: cols[i].w - 8,
@@ -578,14 +615,16 @@ class InvoiceService {
         currentY = renderTableHeader(currentY);
 
         items.forEach((item, idx) => {
-            if (ensureSpace(30)) {
+            const accQty = Number(item.accepted_units || 0);
+            const descText = item.productName || 'Unknown Product';
+            
+            const descHeight = doc.heightOfString(descText, { width: cols[1].w - 8 });
+            const rowHeight = Math.max(26, descHeight + 10);
+
+            if (ensureSpace(rowHeight, currentY)) {
                 currentY = doc.page.margins.top;
                 currentY = renderTableHeader(currentY);
             }
-
-            const accQty = Number(item.accepted_units || 0);
-
-            const rowHeight = 26;
 
             // Alternate row background
             if (idx % 2 === 0) {
@@ -599,17 +638,17 @@ class InvoiceService {
                 .rect(x, currentY, width, rowHeight)
                 .stroke();
 
-            let colX = x + 8;
             doc.fontSize(9)
                 .font('Helvetica')
                 .fillColor(this.colors.text);
 
             const values = [
                 String(idx + 1),
-                item.productName || 'Unknown Product',
+                descText,
                 String(accQty)
             ];
 
+            let colX = x + 8;
             values.forEach((val, i) => {
                 doc.text(val, colX, currentY + 8, {
                     width: cols[i].w - 8,
@@ -672,7 +711,7 @@ class InvoiceService {
         currentY = renderPaymentHeader(currentY);
 
         payments.forEach((payment, idx) => {
-            if (ensureSpace(28)) {
+            if (ensureSpace(28, currentY)) {
                 currentY = doc.page.margins.top;
                 currentY = renderPaymentHeader(currentY);
             }
@@ -790,10 +829,13 @@ class InvoiceService {
         const startX = doc.page.margins.left;
         let cursorY = doc.page.margins.top;
 
-        const ensureSpace = (needed = 50) => {
-            if (cursorY + needed > pageHeight - doc.page.margins.bottom) {
+        const ensureSpace = (needed = 50, customY = null) => {
+            const checkY = customY !== null ? customY : cursorY;
+            if (checkY + needed > pageHeight - doc.page.margins.bottom) {
                 doc.addPage();
-                cursorY = doc.page.margins.top;
+                if (customY === null) {
+                    cursorY = doc.page.margins.top;
+                }
                 return true;
             }
             return false;
@@ -822,12 +864,11 @@ class InvoiceService {
         advance(25);
 
         // === SENDER / SHIP TO BOXES ===
-        ensureSpace(170);
-        this.renderShippingInfoBoxes(doc, startX, cursorY, contentWidth, {
+        const infoBoxesHeight = this.renderShippingInfoBoxes(doc, startX, cursorY, contentWidth, {
             orderData,
             sender
-        });
-        advance(170);
+        }, ensureSpace);
+        advance(infoBoxesHeight || 170);
 
         // === ITEMS TABLE (no pricing) ===
         ensureSpace(60);
