@@ -121,22 +121,41 @@ async function registerUser(req, res) {
             });
         }
 
-        // Verify OTP before registration
-        if (!otp) {
-            return res.status(400).json({
-                success: false,
-                message: 'OTP is required for registration'
-            });
+        // Check if the request is from an admin (to skip OTP)
+        const authHeader = req.headers?.authorization;
+        let isAdmin = false;
+        if (authHeader && authHeader.startsWith('Bearer ')) {
+            try {
+                const token = authHeader.split(' ')[1];
+                const jwt = require('jsonwebtoken');
+                const jwtSecret = process.env.JWT_ACCESS_SECRET || 'cly2025a';
+                const decoded = jwt.verify(token, jwtSecret);
+                if (decoded.role === 'admin' || decoded.role === 'manager') {
+                    isAdmin = true;
+                }
+            } catch (err) {
+                console.log('Token verification failed in registerUser, proceeding with OTP requirement');
+            }
         }
 
-        // Verify OTP and delete it after successful verification
-        const otpModel = require('../models/otpModel');
-        const otpVerification = await otpModel.verifyOTP(emailID, otp, true); // true = delete after verification
-        if (!otpVerification.valid) {
-            return res.status(400).json({
-                success: false,
-                message: otpVerification.message || 'Invalid or expired OTP'
-            });
+        // Verify OTP before registration (if not an admin)
+        if (!isAdmin) {
+            if (!otp) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'OTP is required for registration'
+                });
+            }
+
+            // Verify OTP and delete it after successful verification
+            const otpModel = require('../models/otpModel');
+            const otpVerification = await otpModel.verifyOTP(emailID, otp, true); // true = delete after verification
+            if (!otpVerification.valid) {
+                return res.status(400).json({
+                    success: false,
+                    message: otpVerification.message || 'Invalid or expired OTP'
+                });
+            }
         }
 
         // OTP verified, proceed with registration

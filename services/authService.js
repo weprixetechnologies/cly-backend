@@ -123,9 +123,9 @@ async function registerUser(userData, role) {
             gstin: userData.gstin || null,
             password,
             role,
-            approval_status: role === 'admin' ? 'approved' : 'pending', // Admin users are auto-approved
-            approved_by: role === 'admin' ? 'system' : null,
-            approved_at: role === 'admin' ? new Date() : null
+            approval_status: 'approved', // Admin approval no longer required
+            approved_by: role === 'admin' ? 'system' : 'self',
+            approved_at: new Date()
         };
 
         // BEGIN TRANSACTION

@@ -320,6 +320,54 @@ async function getUserListStats(req, res) {
     }
 }
 
+// Reset user password (admin action)
+async function resetUserPassword(req, res) {
+    try {
+        const { uid } = req.params;
+        const { password } = req.body;
+
+        if (!uid || !password) {
+            return res.status(400).json({
+                success: false,
+                message: 'User ID and new password are required'
+            });
+        }
+
+        if (password.length < 6) {
+            return res.status(400).json({
+                success: false,
+                message: 'Password must be at least 6 characters long'
+            });
+        }
+
+        // Hash password
+        const bcrypt = require('bcryptjs');
+        const saltRounds = 12;
+        const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+        const result = await authModel.updateUserPassword(uid, hashedPassword);
+
+        if (result) {
+            res.status(200).json({
+                success: true,
+                message: 'Password reset successfully'
+            });
+        } else {
+            res.status(404).json({
+                success: false,
+                message: 'User not found'
+            });
+        }
+    } catch (error) {
+        console.error('Reset user password error:', error.message);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to reset user password',
+            error: error.message
+        });
+    }
+}
+
 module.exports = {
     getPendingUsers,
     getAllUsers,
@@ -329,5 +377,6 @@ module.exports = {
     updateUser,
     getUserOrders,
     getUserStatistics,
-    getUserListStats
+    getUserListStats,
+    resetUserPassword
 };

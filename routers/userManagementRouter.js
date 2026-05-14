@@ -33,4 +33,7 @@ router.put('/:uid/approve', userManagementController.approveUser);
 // Reject user
 router.put('/:uid/reject', userManagementController.rejectUser);
 
+// Reset password
+router.put('/:uid/reset-password', userManagementController.resetUserPassword);
+
 module.exports = router;
