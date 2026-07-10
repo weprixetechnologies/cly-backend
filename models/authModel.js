@@ -77,6 +77,15 @@ async function createUser(userData, connection = null) {
         } else {
             [result] = await db.execute(query, params);
         }
+        
+        // Auto-enroll as affiliate
+        const affiliateModel = require('./affiliateModel');
+        try {
+            await affiliateModel.enrollAffiliate(uid, connection);
+        } catch (affiliateError) {
+            console.error('Error auto-enrolling affiliate:', affiliateError);
+            // Non-blocking error, we still want to return the user
+        }
 
         return {
             uid,

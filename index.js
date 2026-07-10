@@ -23,6 +23,7 @@ const invoiceRouter = require('./routers/invoiceRouter.js');
 const passwordResetRouter = require('./routers/passwordResetRouter.js');
 const visitorRouter = require('./routers/visitorRouter.js');
 const videoRouter = require('./routers/videoRouter.js');
+const affiliateRouter = require('./routers/affiliateRoutes.js');
 
 // Middleware
 app.use(cors());
@@ -72,6 +73,7 @@ app.use('/api/invoice', invoiceRouter);
 app.use('/api/password-reset', passwordResetRouter);
 app.use('/api/visitors', visitorRouter);
 app.use('/api/videos', videoRouter);
+app.use('/api/affiliate', affiliateRouter);
 
 // Setup routes (for creating tables)
 // Additional setup routes can be added here as needed

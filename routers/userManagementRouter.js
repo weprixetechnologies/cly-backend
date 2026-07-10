@@ -6,6 +6,9 @@ const { verifyAdminAccessToken } = require('../middleware/adminAuthMiddleware');
 // Apply admin authentication to all routes
 router.use(verifyAdminAccessToken);
 
+// Create user (bypasses OTP)
+router.post('/', userManagementController.createUser);
+
 // Get all pending users
 router.get('/pending', userManagementController.getPendingUsers);
 

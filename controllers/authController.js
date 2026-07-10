@@ -123,7 +123,7 @@ async function registerUser(req, res) {
 
         // Check if the request is from an admin (to skip OTP)
         const authHeader = req.headers?.authorization;
-        let isAdmin = false;
+        let isAdmin = false; console.log("AuthHeader:", authHeader);
         if (authHeader && authHeader.startsWith('Bearer ')) {
             try {
                 const token = authHeader.split(' ')[1];

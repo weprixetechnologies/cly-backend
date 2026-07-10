@@ -27,7 +27,7 @@ const placeOrder = async (req, res) => {
         }
 
         // Extract order details from request body
-        const { address, paymentMode, couponCode, customerComment, themeCategory } = req.body;
+        const { address, paymentMode, couponCode, customerComment, themeCategory, affiliate_link_id, affiliate_id } = req.body;
 
         // Validate required fields
         if (!address) {
@@ -49,6 +49,36 @@ const placeOrder = async (req, res) => {
         };
 
         const { orderID } = await orderModel.createOrderFromCart(orderData);
+
+        // Process affiliate commission if present
+        console.log('[placeOrder] Affiliate data received:', { affiliate_link_id, affiliate_id, uid });
+        if (affiliate_id) {
+            try {
+                const affiliateModel = require('../models/affiliateModel');
+                
+                // 1. Record the attribution for analytics
+                // Check for self referral first
+                const db = require('../utils/dbconnect');
+                const aff = await db.query('SELECT uid FROM affiliates WHERE id = ?', [affiliate_id]);
+                if (aff[0].length > 0 && String(aff[0][0].uid) !== String(uid)) {
+                    await affiliateModel.createAttribution(uid, affiliate_link_id, affiliate_id);
+
+                    // 2. Calculate the order total
+                    const orderTotal = await orderModel.calculateOrderTotal(orderID);
+
+                    // 3. Get commission settings
+                    const settings = await affiliateModel.getGlobalCommissionSettings();
+                    const percentage = parseFloat(settings?.commission_percentage || 5);
+                    const cap = parseFloat(settings?.commission_cap_amount || 0);
+
+                    // 4. Create pending commission
+                    await affiliateModel.createCommission(orderID, affiliate_id, affiliate_link_id, orderTotal, percentage, cap);
+                }
+            } catch (err) {
+                console.error('[orderController] Affiliate commission creation error:', err.message);
+                // Do not fail the order placement if affiliate tracking fails
+            }
+        }
 
         if (shouldClear) {
             try { await cartModel.clearCart(uid); } catch (_) { }

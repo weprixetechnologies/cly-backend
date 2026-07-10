@@ -378,5 +378,40 @@ module.exports = {
     getUserOrders,
     getUserStatistics,
     getUserListStats,
-    resetUserPassword
+    resetUserPassword,
+    createUser
 };
+
+const authService = require('../services/authService');
+
+// Create user (Admin only, skips OTP)
+async function createUser(req, res) {
+    try {
+        const { emailID, phoneNumber, name, password, gstin, role, status } = req.body;
+
+        if (!emailID || !phoneNumber || !name || !password) {
+            return res.status(400).json({ success: false, message: 'Email, phone number, name, and password are required' });
+        }
+
+        // Register user via authService
+        const result = await authService.registerUserRole({
+            emailID,
+            phoneNumber,
+            name,
+            password,
+            gstin: gstin || null,
+            device: 'admin-panel'
+        });
+
+        // Update role and status if specified (authService sets default role to 'user' and approval to 'approved')
+        if (role || status) {
+            const db = require('../utils/dbconnect');
+            await db.query('UPDATE users SET role = ?, status = ? WHERE emailID = ?', [role || 'user', status || 'active', emailID]);
+        }
+
+        res.status(201).json({ success: true, message: 'User created successfully', data: result.user });
+    } catch (error) {
+        console.error('Admin create user error:', error.message);
+        res.status(400).json({ success: false, message: error.message });
+    }
+}

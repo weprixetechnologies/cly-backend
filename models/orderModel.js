@@ -1,5 +1,6 @@
 const db = require('../utils/dbconnect');
 const productModel = require('./productModel');
+const affiliateModel = require('./affiliateModel');
 
 function generateOrderID() {
     return `ORD_${Date.now()}_${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
@@ -68,6 +69,42 @@ async function createOrderFromCart(orderData) {
             );
         }
 
+        // --- AFFILIATE COMMISSION LOGIC ---
+        try {
+            const attribution = await affiliateModel.getActiveAttribution(uid);
+            if (attribution) {
+                const settings = await affiliateModel.getGlobalCommissionSettings();
+                if (settings) {
+                    const percentage = settings.commission_percentage;
+                    const cap = settings.commission_cap_amount;
+                    
+                    // Cap could be null
+                    let finalAmount = (totalOrderAmount * percentage) / 100;
+                    if (cap !== null && cap > 0) {
+                        finalAmount = Math.min(finalAmount, cap);
+                    }
+                    
+                    await connection.execute(`
+                        INSERT INTO affiliate_commissions 
+                        (orderID, affiliate_id, affiliate_link_id, order_amount, commission_percentage_applied, commission_cap_applied, commission_amount, status)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, 'PENDING')
+                    `, [
+                        orderID, 
+                        attribution.affiliate_id, 
+                        attribution.affiliate_link_id, 
+                        totalOrderAmount, 
+                        percentage, 
+                        cap, 
+                        finalAmount
+                    ]);
+                }
+            }
+        } catch (affiliateErr) {
+            console.error('Error recording affiliate commission:', affiliateErr);
+            // Non-blocking
+        }
+        // ----------------------------------
+
         await connection.commit();
         return { orderID };
     } catch (error) {
@@ -121,6 +158,18 @@ async function updateOrderStatus(orderID, orderStatus) {
             'UPDATE orders SET orderStatus = ? WHERE orderID = ?',
             [orderStatus, orderID]
         );
+        
+        // --- AFFILIATE COMMISSION LOGIC ---
+        if (result.affectedRows > 0) {
+            try {
+                await affiliateModel.handleOrderStatusChange(orderID, orderStatus);
+            } catch (err) {
+                console.error('Error handling affiliate order status change:', err);
+                // Non-blocking
+            }
+        }
+        // ----------------------------------
+
         return result.affectedRows > 0;
     } catch (error) {
         throw new Error(`Error updating order status: ${error.message}`);
