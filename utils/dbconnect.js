@@ -4,7 +4,8 @@ const mysql = require('mysql2')
 //     host: '127.0.0.1',
 //     user: 'root',
 //     password: 'rseditz@222',
-//     database: 'cly'
+//     database: 'cly',
+//     timezone: '+05:30'
 // })
 
 const pool = mysql.createPool({

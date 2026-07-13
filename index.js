@@ -24,23 +24,18 @@ const passwordResetRouter = require('./routers/passwordResetRouter.js');
 const visitorRouter = require('./routers/visitorRouter.js');
 const videoRouter = require('./routers/videoRouter.js');
 const affiliateRouter = require('./routers/affiliateRoutes.js');
+const reviewRouter = require('./routers/reviewRouter.js');
+const blogRouter = require('./routers/blogRouter.js');
+const settingsRouter = require('./routers/settingsRouter.js');
 
 // Middleware
 app.use(cors());
 
-
-
-
-
 // // Trust proxy for accurate IP detection
 app.set('trust proxy', true);
 
-
-
 app.use(express.json({ limit: '1000mb' }));
 app.use(express.urlencoded({ limit: '1000mb', extended: true }));
-
-
 
 // Health check endpoint
 app.use('/health', (req, res) => {
@@ -74,9 +69,26 @@ app.use('/api/password-reset', passwordResetRouter);
 app.use('/api/visitors', visitorRouter);
 app.use('/api/videos', videoRouter);
 app.use('/api/affiliate', affiliateRouter);
+app.use('/api', reviewRouter);
+app.use('/api', blogRouter);
+app.use('/api/settings', settingsRouter);
 
 // Setup routes (for creating tables)
 // Additional setup routes can be added here as needed
+
+// Start background worker for scheduled blog posts
+// Ensure settings table exists on startup
+const settingsModel = require('./models/settingsModel.js');
+settingsModel.ensureTable().catch(err => console.error('❌ Failed to create site_settings table:', err));
+
+const blogModel = require('./models/blogModel.js');
+setInterval(async () => {
+    try {
+        await blogModel.publishScheduledPosts();
+    } catch (err) {
+        console.error('❌ Error running scheduled posts publishing job:', err);
+    }
+}, 5 * 60 * 1000); // Check every 5 minutes
 
 app.listen(9878, () => {
     console.log(` Server started on port 9878 - LOGGING IS WORKING! `);
