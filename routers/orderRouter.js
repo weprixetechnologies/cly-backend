@@ -3,6 +3,7 @@ const router = express.Router();
 const orderController = require('../controllers/orderController');
 const { verifyUserAccessToken } = require('../middleware/userAuthMiddleware');
 const { verifyAdminAccessToken } = require('../middleware/adminAuthMiddleware');
+const smsService = require('../services/smsService');
 
 // Apply authentication middleware to all routes
 router.use('/user', verifyUserAccessToken);
@@ -218,5 +219,152 @@ router.delete('/admin/:orderID/payment/:paymentId', orderController.deletePaymen
 // Update order remarks
 router.put('/admin/:orderID/remarks', orderController.updateOrderRemarks);
 
+// ─── Dispatch Order ───────────────────────────────────────────────────────────
+// POST /api/order/admin/:orderID/dispatch
+// Body: { trackingLink: string, awbNumber?: string, companyName?: string }
+//
+// Admin enters these 3 fields from the panel:
+//   - trackingLink  → the full tracking URL sent in the SMS
+//   - awbNumber     → the courier tracking / AWB code (saved for records)
+//   - companyName   → the courier company name      (saved for records)
+//
+// Sets orderStatus → 'dispatched', saves all three fields in admin_notes,
+// and fires the approved dispatch SMS with the trackingLink.
+router.post('/admin/:orderID/dispatch', async (req, res) => {
+    try {
+        const { orderID } = req.params;
+        const { trackingLink, awbNumber, companyName } = req.body || {};
+
+        if (!trackingLink) {
+            return res.status(400).json({
+                success: false,
+                message: 'trackingLink is required'
+            });
+        }
+
+        const orderModel = require('../models/orderModel');
+        const rows = await orderModel.getOrderById(orderID);
+        if (!rows || rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'Order not found' });
+        }
+
+        const firstItem = rows[0];
+        const uid       = firstItem.uid;
+        const addrPhone = firstItem.addressPhone;
+
+        // Save details to the new columns in the orders table
+        const db = require('../utils/dbconnect');
+        await db.execute(
+            `UPDATE orders 
+             SET isDispatched = 1, 
+                 awbNumber = ?, 
+                 companyName = ?, 
+                 trackingLink = ? 
+             WHERE orderID = ?`,
+            [awbNumber || null, companyName || null, trackingLink, orderID]
+        );
+
+
+        // ── Send Dispatch SMS (non-blocking) ─────────────────────────────────
+        // DLT Template: "Dear {name}, Your order {orderID} has been dispatched
+        //                and is on its way. Track your shipment here: {trackingLink}.
+        //                Thank you for shopping with us. Cursive Letters LY"
+        try {
+            const authModel = require('../models/authModel');
+            const userRecord = await authModel.getUserByUID(uid);
+            const customerPhone = addrPhone || userRecord?.phoneNumber;
+            const customerName  = userRecord?.name || userRecord?.username || 'Customer';
+
+            if (customerPhone) {
+                smsService.sendDispatchSMS(customerPhone, customerName, orderID, awbNumber || trackingLink)
+                    .then(r => r.success
+                        ? console.log(`[SMS] ✅ Dispatch SMS sent for ${orderID}`)
+                        : console.warn(`[SMS] ⚠️  Dispatch SMS failed: ${r.error}`)
+                    )
+                    .catch(e => console.warn('[SMS] ⚠️  Dispatch SMS error:', e.message));
+            } else {
+                console.warn(`[SMS] No phone number found for order ${orderID} — dispatch SMS skipped`);
+            }
+        } catch (smsErr) {
+            console.warn('[SMS] Dispatch SMS setup error (non-fatal):', smsErr.message);
+        }
+        // ─────────────────────────────────────────────────────────────────────
+
+        return res.status(200).json({
+            success: true,
+            message: 'Order dispatched and SMS sent',
+            data: { orderID, trackingLink, awbNumber: awbNumber || null, companyName: companyName || null }
+        });
+    } catch (error) {
+        console.error('[orderRouter] /admin/:orderID/dispatch error:', error.message);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to dispatch order',
+            error: error.message
+        });
+    }
+});
+
+// Manual trigger for sending/resending dispatch SMS
+router.post('/admin/:orderID/send-dispatch-sms', async (req, res) => {
+    try {
+        const { orderID } = req.params;
+        const orderModel = require('../models/orderModel');
+        const rows = await orderModel.getOrderById(orderID);
+        if (!rows || rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'Order not found' });
+        }
+
+        const firstItem = rows[0];
+        const uid       = firstItem.uid;
+        const addrPhone = firstItem.addressPhone;
+        const trackingLink = firstItem.trackingLink;
+        const awbNumber = firstItem.awbNumber;
+
+        if (!firstItem.isDispatched || (!awbNumber && !trackingLink)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Order has not been dispatched yet. Please dispatch it first.'
+            });
+        }
+
+        const authModel = require('../models/authModel');
+        const userRecord = await authModel.getUserByUID(uid);
+        const customerPhone = addrPhone || userRecord?.phoneNumber;
+        const customerName  = userRecord?.name || userRecord?.username || 'Customer';
+
+        if (!customerPhone) {
+            return res.status(400).json({
+                success: false,
+                message: 'No mobile phone number linked to this order/account.'
+            });
+        }
+
+        console.log(`[SMS] Manually triggering dispatch SMS for order ${orderID} to ${customerPhone}`);
+        const smsResult = await smsService.sendDispatchSMS(customerPhone, customerName, orderID, awbNumber || trackingLink);
+
+        if (smsResult.success) {
+            return res.status(200).json({
+                success: true,
+                message: `Dispatch SMS sent successfully! (JobId: ${smsResult.jobId})`
+            });
+        } else {
+            return res.status(500).json({
+                success: false,
+                message: `Gateway returned error: ${smsResult.error || 'Unknown failure'}`
+            });
+        }
+    } catch (error) {
+        console.error('[orderRouter] /admin/:orderID/send-dispatch-sms error:', error.message);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to send dispatch SMS',
+            error: error.message
+        });
+    }
+});
+
 module.exports = router;
+
+
 

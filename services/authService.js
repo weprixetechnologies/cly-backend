@@ -321,23 +321,26 @@ async function loginUser(loginData, role) {
     let connection = null;
 
     try {
-        const { emailID, password, device } = loginData;
+        const { emailID, phoneNumber, password, device } = loginData;
 
-        // Validate required fields
-        if (!emailID || !password) {
-            throw new Error('Email and password are required');
-        }
+        if (!password) throw new Error('Password is required');
+        if (!emailID && !phoneNumber) throw new Error('Email or phone number is required');
 
-        // Validate email format
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(emailID)) {
-            throw new Error('Invalid email format');
-        }
+        let user = null;
 
-        // Get user by email
-        const user = await authModel.getUserByEmail(emailID);
-        if (!user) {
-            throw new Error('Invalid email or password');
+        if (phoneNumber) {
+            // Phone-based login (primary)
+            const digits = String(phoneNumber).replace(/\D/g, '');
+            const normalised = digits.length === 12 && digits.startsWith('91') ? digits.slice(2) : digits;
+            if (!/^\d{10}$/.test(normalised)) throw new Error('Invalid phone number');
+            user = await authModel.getUserByPhone(normalised);
+            if (!user) throw new Error('Invalid phone number or password');
+        } else {
+            // Email-based login (fallback / toggle)
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(emailID)) throw new Error('Invalid email format');
+            user = await authModel.getUserByEmail(emailID);
+            if (!user) throw new Error('Invalid email or password');
         }
 
         // Check if user has the correct role

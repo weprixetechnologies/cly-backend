@@ -1,82 +1,78 @@
 const otpModel = require('../models/otpModel');
 const emailService = require('./emailService');
 const authModel = require('../models/authModel');
+const smsService = require('./smsService');
 
 // Generate 6-digit OTP
 function generateOTP() {
     return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-// Send OTP to email
-async function sendOTP(email, userName) {
+// Send OTP to phone via SMS (primary) and email (fallback)
+async function sendOTP(email, userName, phoneNumber) {
     try {
         console.log('🔐 OTP Service - sendOTP called');
-        console.log('🔐 Email:', email);
-        console.log('🔐 UserName:', userName);
+        console.log('🔐 Email:', email, '| Phone:', phoneNumber || 'none');
 
         // Validate email format
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(email)) {
-            console.error('❌ Invalid email format:', email);
             throw new Error('Invalid email format');
         }
 
-        // Check if email already exists in users table
-        console.log('🔐 Checking if email exists in users table...');
+        // Check if email already exists
         const emailExists = await authModel.checkEmailExists(email);
-        if (emailExists) {
-            console.error('❌ Email already registered:', email);
-            throw new Error('Email already registered');
-        }
-        console.log('✅ Email is available');
+        if (emailExists) throw new Error('Email already registered');
 
         // Generate OTP
         const otp = generateOTP();
         console.log('🔐 Generated OTP:', otp);
 
         // Store OTP in database
-        console.log('🔐 Storing OTP in database...');
-        try {
-            await otpModel.createOTP(email, otp);
-            console.log('✅ OTP stored in database');
-            
-            // Verify OTP was actually stored (check database directly, not using getOTPByEmail which checks expiration)
-            const db = require('../utils/dbconnect');
-            const [verifyRows] = await db.execute(
-                'SELECT * FROM signup_otps WHERE email = ? ORDER BY createdAt DESC LIMIT 1',
-                [email]
-            );
-            if (verifyRows.length === 0) {
-                console.error('❌ CRITICAL: OTP was not found in database after creation!');
-                throw new Error('Failed to store OTP in database. Please try again.');
+        await otpModel.createOTP(email, otp);
+
+        // Verify stored
+        const db = require('../utils/dbconnect');
+        const [verifyRows] = await db.execute(
+            'SELECT * FROM signup_otps WHERE email = ? ORDER BY createdAt DESC LIMIT 1',
+            [email]
+        );
+        if (verifyRows.length === 0) throw new Error('Failed to store OTP in database. Please try again.');
+        console.log('✅ OTP stored in DB (ID:', verifyRows[0].id + ')');
+
+        // ── Primary: Send OTP via SMS to phone ─────────────────────────────
+        if (phoneNumber) {
+            try {
+                const smsResult = await smsService.sendSignupOTPSMS(phoneNumber, otp, 10);
+                if (smsResult.success) {
+                    console.log('📱 Signup OTP SMS sent successfully to', phoneNumber);
+                } else {
+                    console.warn('⚠️  Signup OTP SMS failed:', smsResult.error);
+                    // Still continue — email fallback below
+                }
+            } catch (smsErr) {
+                console.warn('⚠️  Signup OTP SMS error (non-fatal):', smsErr.message);
             }
-            console.log('✅ Verified OTP exists in database (ID:', verifyRows[0].id + ')');
-        } catch (dbError) {
-            console.error('❌ Database error while storing OTP:', dbError.message);
-            console.error('❌ Database error stack:', dbError.stack);
-            throw new Error('Failed to store OTP in database. Please try again.');
         }
+        // ───────────────────────────────────────────────────────────
 
-        // Send OTP via email
-        console.log('🔐 Sending OTP via email...');
-        const emailResult = await emailService.sendOTPEmail(email, otp, userName);
-        console.log('🔐 Email result:', emailResult);
+        // ── Fallback: Send OTP via email (non-blocking) ───────────────────
+        emailService.sendOTPEmail(email, otp, userName)
+            .then(r => r.success
+                ? console.log('📧 OTP email also sent (fallback)')
+                : console.warn('⚠️  OTP email fallback failed:', r.error)
+            )
+            .catch(e => console.warn('⚠️  OTP email fallback error:', e.message));
+        // ───────────────────────────────────────────────────────────
 
-        if (!emailResult.success) {
-            // If email fails, delete the OTP record
-            console.error('❌ Email sending failed, deleting OTP from database');
-            await otpModel.deleteOTP(email);
-            throw new Error(emailResult.error || 'Failed to send OTP email. Please try again.');
-        }
-
-        console.log('✅ OTP sent successfully');
         return {
             success: true,
-            message: 'OTP sent successfully to your email'
+            message: phoneNumber
+                ? 'OTP sent to your registered mobile number'
+                : 'OTP sent to your email'
         };
     } catch (error) {
         console.error('❌ OTP Service error:', error.message);
-        console.error('❌ Error stack:', error.stack);
         throw new Error(error.message);
     }
 }

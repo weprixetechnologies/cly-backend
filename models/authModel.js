@@ -105,6 +105,15 @@ async function createUser(userData, connection = null) {
     }
 }
 
+// Helper to normalize lowercase/camelCase phone number property
+function normalizeUserRow(user) {
+    if (!user) return null;
+    if (user.phonenumber !== undefined && user.phoneNumber === undefined) {
+        user.phoneNumber = user.phonenumber;
+    }
+    return user;
+}
+
 // Get user by email
 async function getUserByEmail(emailID) {
     try {
@@ -112,9 +121,25 @@ async function getUserByEmail(emailID) {
             'SELECT * FROM users WHERE emailID = ?',
             [emailID]
         );
-        return rows[0] || null;
+        return normalizeUserRow(rows[0]) || null;
     } catch (error) {
         throw new Error(`Error getting user by email: ${error.message}`);
+    }
+}
+
+// Get user by phone number
+async function getUserByPhone(phoneNumber) {
+    try {
+        // Normalise: strip country code prefix if present
+        const digits = String(phoneNumber).replace(/\D/g, '');
+        const normalised = digits.length === 12 && digits.startsWith('91') ? digits.slice(2) : digits;
+        const [rows] = await db.execute(
+            'SELECT * FROM users WHERE phonenumber = ?',
+            [normalised]
+        );
+        return normalizeUserRow(rows[0]) || null;
+    } catch (error) {
+        throw new Error(`Error getting user by phone: ${error.message}`);
     }
 }
 
@@ -125,11 +150,12 @@ async function getUserByUsername(username) {
             'SELECT * FROM users WHERE username = ?',
             [username]
         );
-        return rows[0] || null;
+        return normalizeUserRow(rows[0]) || null;
     } catch (error) {
         throw new Error(`Error getting user by username: ${error.message}`);
     }
 }
+
 
 // Get user by UID
 async function getUserByUID(uid) {
@@ -138,7 +164,7 @@ async function getUserByUID(uid) {
             'SELECT * FROM users WHERE uid = ?',
             [uid]
         );
-        return rows[0] || null;
+        return normalizeUserRow(rows[0]) || null;
     } catch (error) {
         throw new Error(`Error getting user by UID: ${error.message}`);
     }
@@ -536,6 +562,7 @@ module.exports = {
     generateUniqueUsername,
     createUser,
     getUserByEmail,
+    getUserByPhone,
     getUserByUsername,
     getUserByUID,
     createSession,

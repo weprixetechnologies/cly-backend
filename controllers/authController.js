@@ -1,37 +1,37 @@
 const authService = require('../services/authService');
 const otpService = require('../services/otpService');
 
-// Send OTP for user registration
+// Send OTP for user registration — OTP goes to phone number via SMS
 async function sendSignupOTP(req, res) {
     try {
-        console.log('📧 ========================================');
-        console.log('📧 SEND SIGNUP OTP REQUEST RECEIVED');
-        console.log('📧 Request body:', { emailID: req.body.emailID, name: req.body.name });
+        console.log('📱 ========================================');
+        console.log('📱 SEND SIGNUP OTP REQUEST RECEIVED');
 
-        const { emailID, name } = req.body;
+        const { emailID, phoneNumber, name } = req.body;
 
-        // Validate required fields
         if (!emailID) {
-            console.error('❌ Email is missing in request');
-            return res.status(400).json({
-                success: false,
-                message: 'Email is required'
-            });
+            return res.status(400).json({ success: false, message: 'Email is required' });
+        }
+        if (!phoneNumber) {
+            return res.status(400).json({ success: false, message: 'Phone number is required to send OTP' });
         }
 
-        console.log('📧 Calling otpService.sendOTP...');
-        const result = await otpService.sendOTP(emailID, name || 'User');
+        // Validate 10-digit phone
+        const digits = String(phoneNumber).replace(/\D/g, '');
+        if (!/^\d{10}$/.test(digits)) {
+            return res.status(400).json({ success: false, message: 'Invalid phone number — must be 10 digits' });
+        }
+
+        console.log('📱 Calling otpService.sendOTP with phone:', digits);
+        // sendOTP(email, name, phoneNumber) — phone triggers SMS OTP
+        const result = await otpService.sendOTP(emailID, name || 'User', digits);
         console.log('✅ OTP service returned:', result);
 
         res.status(200).json(result);
 
     } catch (error) {
         console.error('❌ Send OTP error:', error.message);
-        console.error('❌ Error stack:', error.stack);
-        res.status(400).json({
-            success: false,
-            message: error.message
-        });
+        res.status(400).json({ success: false, message: error.message });
     }
 }
 
@@ -279,21 +279,21 @@ async function loginAdmin(req, res) {
     }
 }
 
-// Login user
+// Login user — accepts phoneNumber (primary) or emailID (toggle fallback)
 async function loginUser(req, res) {
     try {
-        const { emailID, password, device } = req.body;
+        const { emailID, phoneNumber, password, device } = req.body;
 
-        // Validate required fields
-        if (!emailID || !password) {
+        if (!password || (!emailID && !phoneNumber)) {
             return res.status(400).json({
                 success: false,
-                message: 'Email and password are required'
+                message: 'Phone number (or email) and password are required'
             });
         }
 
         const result = await authService.loginUserRole({
-            emailID,
+            emailID: emailID || null,
+            phoneNumber: phoneNumber || null,
             password,
             device
         });
@@ -302,10 +302,7 @@ async function loginUser(req, res) {
 
     } catch (error) {
         console.error('User login error:', error.message);
-        res.status(401).json({
-            success: false,
-            message: error.message
-        });
+        res.status(401).json({ success: false, message: error.message });
     }
 }
 
