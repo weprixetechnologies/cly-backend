@@ -96,14 +96,36 @@ router.put('/admin/:orderID/status', async (req, res) => {
         const ok = await orderModel.updateOrderStatus(orderID, orderStatus);
         if (!ok) return res.status(200).json({ success: false, message: 'Failed to update order status' });
 
-        // On accept, add order total to user's outstanding
+        // On accept, add order total to user's outstanding & send Order Confirmation SMS
         if (orderStatus === 'accepted' && previousStatus !== 'accepted') {
             try {
                 const items = await orderModel.getOrderById(orderID);
-                const uid = items?.[0]?.uid;
+                const firstItem = items?.[0];
+                const uid = firstItem?.uid;
+                const addrPhone = firstItem?.addressPhone;
+
                 if (uid) {
                     const total = await orderModel.calculateOrderTotal(orderID);
                     await orderModel.addOutstanding(uid, total);
+                }
+
+                // Send Order Confirmation SMS (non-blocking)
+                try {
+                    const authModel = require('../models/authModel');
+                    const userRecord = await authModel.getUserByUID(uid);
+                    const customerPhone = addrPhone || userRecord?.phoneNumber;
+                    const customerName  = userRecord?.name || userRecord?.username || 'Customer';
+
+                    if (customerPhone) {
+                        smsService.sendOrderConfirmationSMS(customerPhone, customerName, orderID)
+                            .then(r => r.success
+                                ? console.log(`[SMS] ✅ Order Confirmation SMS sent on acceptance | OrderID: ${orderID}`)
+                                : console.warn(`[SMS] ⚠️  Order Confirmation SMS on acceptance failed: ${r.error}`)
+                            )
+                            .catch(e => console.warn('[SMS] ⚠️  Order Confirmation SMS on acceptance error:', e.message));
+                    }
+                } catch (smsErr) {
+                    console.warn('[SMS] Order Confirmation SMS setup error on acceptance (non-fatal):', smsErr.message);
                 }
             } catch (e) {
                 console.error('[orderRouter] accept side-effects failed:', e.message);
@@ -255,10 +277,10 @@ router.post('/admin/:orderID/dispatch', async (req, res) => {
         const { orderID } = req.params;
         const { trackingLink, awbNumber, companyName } = req.body || {};
 
-        if (!trackingLink) {
+        if (!trackingLink && !awbNumber) {
             return res.status(400).json({
                 success: false,
-                message: 'trackingLink is required'
+                message: 'Either trackingLink or awbNumber is required'
             });
         }
 
@@ -281,7 +303,7 @@ router.post('/admin/:orderID/dispatch', async (req, res) => {
                  companyName = ?, 
                  trackingLink = ? 
              WHERE orderID = ?`,
-            [awbNumber || null, companyName || null, trackingLink, orderID]
+            [awbNumber || null, companyName || null, trackingLink || null, orderID]
         );
 
 

@@ -85,25 +85,6 @@ const placeOrder = async (req, res) => {
             try { await cartModel.clearCart(uid); } catch (_) { }
         }
 
-        // ── Send Order Confirmation SMS (non-blocking) ────────────────────
-        try {
-            const authModel = require('../models/authModel');
-            const userRecord = await authModel.getUserByUID(uid);
-            const customerPhone = address?.phone || userRecord?.phoneNumber;
-            const customerName  = userRecord?.name || userRecord?.username || 'Customer';
-
-            if (customerPhone) {
-                smsService.sendOrderConfirmationSMS(customerPhone, customerName, orderID)
-                    .then(r => r.success
-                        ? console.log(`[SMS] ✅ Order Confirmation SMS sent | OrderID: ${orderID}`)
-                        : console.warn(`[SMS] ⚠️  Order Confirmation SMS failed: ${r.error}`)
-                    )
-                    .catch(e => console.warn('[SMS] ⚠️  Order Confirmation SMS error:', e.message));
-            }
-        } catch (smsErr) {
-            console.warn('[SMS] Order Confirmation SMS setup error (non-fatal):', smsErr.message);
-        }
-        // ─────────────────────────────────────────────────────────────────
 
         return res.status(201).json({
             success: true,
