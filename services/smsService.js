@@ -203,6 +203,35 @@ async function sendDispatchSMS(phone, customerName, orderID, awbNumber) {
 }
 
 
+/**
+ * Query the SMS Gateway to check the delivery report/status of a job.
+ * 
+ * @param {string} jobId The JobId returned by SendSMS
+ */
+async function getDeliveryStatus(jobId) {
+    if (!jobId) return { success: false, error: 'No Job ID provided' };
+    if (!SMS_API_KEY) return { success: false, error: 'SMS_API_KEY not configured' };
+
+    try {
+        const url = `${SMS_BASE_URL.replace('/SendSMS', '/GetDelivery')}?APIKey=${SMS_API_KEY}&jobid=${jobId}`;
+        const response = await axios.get(url, { timeout: 10000 });
+        const data = response.data;
+
+        if (data?.ErrorCode === '0') {
+            const report = data.DeliveryReports?.[0];
+            return {
+                success: true,
+                status: report?.DeliveryStatus || 'Unknown',
+                recipient: report?.Recipient,
+            };
+        } else {
+            return { success: false, error: data?.ErrorMessage || `Gateway error code ${data?.ErrorCode}` };
+        }
+    } catch (err) {
+        return { success: false, error: err.message };
+    }
+}
+
 // ─── Legacy aliases (keep old callers working) ───────────────────────────────
 /** @deprecated Use sendSignupOTPSMS */
 const sendOTPSMS = sendSignupOTPSMS;
@@ -216,6 +245,7 @@ module.exports = {
     sendPasswordResetOTPSMS,
     sendOrderConfirmationSMS,
     sendDispatchSMS,
+    getDeliveryStatus,
     // legacy aliases
     sendOTPSMS,
     sendOrderConfirmedSMS,

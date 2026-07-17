@@ -140,6 +140,26 @@ router.get('/admin/:orderID', async (req, res) => {
         if (!orderRows || orderRows.length === 0) {
             return res.status(404).json({ success: false, message: 'Order not found' });
         }
+
+        // Check if there is an smsJobId and retrieve real-time status if needed
+        const firstItem = orderRows[0];
+        if (firstItem.smsJobId && firstItem.smsStatus !== 'Delivered') {
+            const delivery = await smsService.getDeliveryStatus(firstItem.smsJobId);
+            if (delivery.success && delivery.status) {
+                // Update database so we don't query gateway unnecessarily next time if delivered
+                const db = require('../utils/dbconnect');
+                await db.execute(
+                    'UPDATE orders SET smsStatus = ? WHERE orderID = ?',
+                    [delivery.status, orderID]
+                ).catch(err => console.error('[SMS] Failed to update smsStatus in DB:', err.message));
+                
+                // Update status in the response data for the items
+                orderRows.forEach(row => {
+                    row.smsStatus = delivery.status;
+                });
+            }
+        }
+
         return res.status(200).json({ success: true, data: orderRows });
     } catch (error) {
         return res.status(500).json({ success: false, message: 'Failed to fetch order', error: error.message });
@@ -277,10 +297,17 @@ router.post('/admin/:orderID/dispatch', async (req, res) => {
 
             if (customerPhone) {
                 smsService.sendDispatchSMS(customerPhone, customerName, orderID, awbNumber || trackingLink)
-                    .then(r => r.success
-                        ? console.log(`[SMS] ✅ Dispatch SMS sent for ${orderID}`)
-                        : console.warn(`[SMS] ⚠️  Dispatch SMS failed: ${r.error}`)
-                    )
+                    .then(r => {
+                        if (r.success) {
+                            console.log(`[SMS] ✅ Dispatch SMS sent for ${orderID}`);
+                            db.execute(
+                                'UPDATE orders SET smsJobId = ?, smsStatus = ? WHERE orderID = ?',
+                                [r.jobId, 'Submitted', orderID]
+                            ).catch(dbErr => console.error('[SMS] Failed to save jobId to DB:', dbErr.message));
+                        } else {
+                            console.warn(`[SMS] ⚠️  Dispatch SMS failed: ${r.error}`);
+                        }
+                    })
                     .catch(e => console.warn('[SMS] ⚠️  Dispatch SMS error:', e.message));
             } else {
                 console.warn(`[SMS] No phone number found for order ${orderID} — dispatch SMS skipped`);
@@ -344,6 +371,12 @@ router.post('/admin/:orderID/send-dispatch-sms', async (req, res) => {
         const smsResult = await smsService.sendDispatchSMS(customerPhone, customerName, orderID, awbNumber || trackingLink);
 
         if (smsResult.success) {
+            const db = require('../utils/dbconnect');
+            await db.execute(
+                'UPDATE orders SET smsJobId = ?, smsStatus = ? WHERE orderID = ?',
+                [smsResult.jobId, 'Submitted', orderID]
+            ).catch(dbErr => console.error('[SMS] Failed to save jobId to DB:', dbErr.message));
+
             return res.status(200).json({
                 success: true,
                 message: `Dispatch SMS sent successfully! (JobId: ${smsResult.jobId})`
