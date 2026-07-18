@@ -41,7 +41,7 @@ const TEMPLATE_IDS = {
     LOGIN_OTP: process.env.SMS_TEMPLATE_OTP || '1777178411219440996',
     RESET_OTP: process.env.SMS_TEMPLATE_RESET_OTP || '1777178411690264265',
     ORDER_CONFIRM: process.env.SMS_TEMPLATE_CONFIRMED || '1777178411694628739',
-    DISPATCH: process.env.SMS_TEMPLATE_DISPATCH || '1777178411685590457',
+    DISPATCH: process.env.SMS_TEMPLATE_DISPATCH || '1777178417937552272',
 };
 
 const SMS_BASE_URL = 'https://www.smsgatewayhub.com/api/mt/SendSMS';
@@ -185,20 +185,22 @@ async function sendOrderConfirmationSMS(phone, customerName, orderID) {
 }
 
 /**
- * Send Dispatch / Shipped SMS.
- *
- * Approved template (ID: 1777178411685590457):
+ * Send order dispatch SMS notification.
+ * Approved template (ID: 1777178417937552272):
  *   "Dear {#var#}, your order {#var#} has been dispatched and is on its way.
- *    Track your shipment here: {#var#}. Thank you for shopping with us.
- *    Cursive Letters LY"
+ *    Your delivery Partner is {#var#} and the tracking number is {#var#}.
+ *    Thank you for shopping with us. Cursive Letters LY"
  *
  * @param {string} phone         Customer mobile number
  * @param {string} customerName  Customer's name
  * @param {string} orderID       Order ID
- * @param {string} awbNumber     AWB tracking number
+ * @param {string} companyName   Delivery Partner name
+ * @param {string} awbNumber     Tracking Number
  */
-async function sendDispatchSMS(phone, customerName, orderID, awbNumber) {
-    const text = `Dear ${customerName}, your order ${orderID} has been dispatched and is on its way. Track your shipment here: ${awbNumber}. Thank you for shopping with us. Cursive Letters LY`;
+async function sendDispatchSMS(phone, customerName, orderID, companyName, awbNumber) {
+    const partner = companyName || 'our courier partner';
+    const tracking = awbNumber || 'dispatched';
+    const text = `Dear ${customerName}, your order ${orderID} has been dispatched and is on its way. Your delivery Partner is ${partner} and the tracking number is ${tracking}. Thank you for shopping with us. Cursive Letters LY`;
     return sendSMS(phone, text, TEMPLATE_IDS.DISPATCH);
 }
 

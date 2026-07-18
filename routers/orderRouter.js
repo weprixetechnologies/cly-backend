@@ -318,7 +318,7 @@ router.post('/admin/:orderID/dispatch', async (req, res) => {
             const customerName  = userRecord?.name || userRecord?.username || 'Customer';
 
             if (customerPhone) {
-                smsService.sendDispatchSMS(customerPhone, customerName, orderID, awbNumber || trackingLink)
+                smsService.sendDispatchSMS(customerPhone, customerName, orderID, companyName, awbNumber || trackingLink)
                     .then(r => {
                         if (r.success) {
                             console.log(`[SMS] ✅ Dispatch SMS sent for ${orderID}`);
@@ -369,6 +369,7 @@ router.post('/admin/:orderID/send-dispatch-sms', async (req, res) => {
         const addrPhone = firstItem.addressPhone;
         const trackingLink = firstItem.trackingLink;
         const awbNumber = firstItem.awbNumber;
+        const companyName = firstItem.companyName;
 
         if (!firstItem.isDispatched || (!awbNumber && !trackingLink)) {
             return res.status(400).json({
@@ -390,7 +391,7 @@ router.post('/admin/:orderID/send-dispatch-sms', async (req, res) => {
         }
 
         console.log(`[SMS] Manually triggering dispatch SMS for order ${orderID} to ${customerPhone}`);
-        const smsResult = await smsService.sendDispatchSMS(customerPhone, customerName, orderID, awbNumber || trackingLink);
+        const smsResult = await smsService.sendDispatchSMS(customerPhone, customerName, orderID, companyName, awbNumber || trackingLink);
 
         if (smsResult.success) {
             const db = require('../utils/dbconnect');
