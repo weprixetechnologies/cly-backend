@@ -24,7 +24,7 @@ require('dotenv').config(); // Load .env variables
  *    Variables: customerName, orderID
  *    Fires: when customer places order (NOT on admin acceptance)
  *
- * 4. ORDER DISPATCH  (Template ID: 1777178411685590457)
+ * 4. ORDER DISPATCH  (Template ID: 1777178417937552272)
  *    "Dear {#var#}, your order {#var#} has been dispatched and is on its way.
  *     Track your shipment here: {#var#}. Thank you for shopping with us.
  *     Cursive Letters LY"
