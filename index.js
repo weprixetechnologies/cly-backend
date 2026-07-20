@@ -25,6 +25,7 @@ const visitorRouter = require('./routers/visitorRouter.js');
 const videoRouter = require('./routers/videoRouter.js');
 const affiliateRouter = require('./routers/affiliateRoutes.js');
 const reviewRouter = require('./routers/reviewRouter.js');
+const siteReviewRouter = require('./routers/siteReviewRouter.js');
 const blogRouter = require('./routers/blogRouter.js');
 const settingsRouter = require('./routers/settingsRouter.js');
 
@@ -70,6 +71,7 @@ app.use('/api/visitors', visitorRouter);
 app.use('/api/videos', videoRouter);
 app.use('/api/affiliate', affiliateRouter);
 app.use('/api', reviewRouter);
+app.use('/api', siteReviewRouter);
 app.use('/api', blogRouter);
 app.use('/api/settings', settingsRouter);
 
@@ -80,6 +82,9 @@ app.use('/api/settings', settingsRouter);
 // Ensure settings table exists on startup
 const settingsModel = require('./models/settingsModel.js');
 settingsModel.ensureTable().catch(err => console.error('❌ Failed to create site_settings table:', err));
+
+const siteReviewModel = require('./models/siteReviewModel.js');
+siteReviewModel.ensureTable().catch(err => console.error('❌ Failed to create site_reviews table:', err));
 
 const blogModel = require('./models/blogModel.js');
 setInterval(async () => {
