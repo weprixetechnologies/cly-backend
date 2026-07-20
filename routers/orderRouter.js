@@ -109,7 +109,7 @@ router.put('/admin/:orderID/status', async (req, res) => {
                     await orderModel.addOutstanding(uid, total);
                 }
 
-                // Send Order Confirmation SMS (non-blocking)
+                // Send Order Acceptance SMS (non-blocking)
                 try {
                     const authModel = require('../models/authModel');
                     const userRecord = await authModel.getUserByUID(uid);
@@ -117,15 +117,15 @@ router.put('/admin/:orderID/status', async (req, res) => {
                     const customerName  = userRecord?.name || userRecord?.username || 'Customer';
 
                     if (customerPhone) {
-                        smsService.sendOrderConfirmationSMS(customerPhone, customerName, orderID)
+                        smsService.sendOrderAcceptedSMS(customerPhone, customerName, orderID)
                             .then(r => r.success
-                                ? console.log(`[SMS] ✅ Order Confirmation SMS sent on acceptance | OrderID: ${orderID}`)
-                                : console.warn(`[SMS] ⚠️  Order Confirmation SMS on acceptance failed: ${r.error}`)
+                                ? console.log(`[SMS] ✅ Order Acceptance SMS sent | OrderID: ${orderID}`)
+                                : console.warn(`[SMS] ⚠️  Order Acceptance SMS failed: ${r.error}`)
                             )
-                            .catch(e => console.warn('[SMS] ⚠️  Order Confirmation SMS on acceptance error:', e.message));
+                            .catch(e => console.warn('[SMS] ⚠️  Order Acceptance SMS error:', e.message));
                     }
                 } catch (smsErr) {
-                    console.warn('[SMS] Order Confirmation SMS setup error on acceptance (non-fatal):', smsErr.message);
+                    console.warn('[SMS] Order Acceptance SMS setup error (non-fatal):', smsErr.message);
                 }
             } catch (e) {
                 console.error('[orderRouter] accept side-effects failed:', e.message);

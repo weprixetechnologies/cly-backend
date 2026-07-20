@@ -17,14 +17,21 @@ require('dotenv').config(); // Load .env variables
  *     10 minutes. Please do not share it with anyone. Cursive Letters LY"
  *    Variables: otp  (validity hardcoded as "10" in template)
  *
- * 3. ORDER CONFIRMATION  (Template ID: 1777178411694628739)
+ * 3. ORDER CONFIRMATION  (Template ID: 1777178447542965101)
  *    "Dear {#var#}, your order {#var#} has been successfully placed. You can
  *     view your order details on our website. We will process your order for
  *     dispatch shortly. Thank you for shopping with us. Cursive Letters LY"
  *    Variables: customerName, orderID
- *    Fires: when customer places order (NOT on admin acceptance)
+ *    Fires: when customer places order (checkout)
  *
- * 4. ORDER DISPATCH  (Template ID: 1777178417937552272)
+ * 4. ORDER ACCEPTANCE  (Template ID: 1777178447542965101)
+ *    "Dear {#var#}, your order No.{#var#} has been successfully accepted. You can
+ *     view your order details on our website. We will process your order for
+ *     dispatch shortly. Thank you for shopping with us. Cursive Letters LY"
+ *    Variables: customerName, orderID
+ *    Fires: when admin sets orderStatus → 'accepted'
+ *
+ * 5. ORDER DISPATCH  (Template ID: 1777178417937552272)
  *    "Dear {#var#}, your order {#var#} has been dispatched and is on its way.
  *     Track your shipment here: {#var#}. Thank you for shopping with us.
  *     Cursive Letters LY"
@@ -40,7 +47,8 @@ const axios = require('axios');
 const TEMPLATE_IDS = {
     LOGIN_OTP: process.env.SMS_TEMPLATE_OTP || '1777178411219440996',
     RESET_OTP: process.env.SMS_TEMPLATE_RESET_OTP || '1777178411690264265',
-    ORDER_CONFIRM: process.env.SMS_TEMPLATE_CONFIRMED || '1777178411694628739',
+    ORDER_CONFIRM: process.env.SMS_TEMPLATE_CONFIRMED || '1777178447542965101',
+    ORDER_ACCEPTED: process.env.SMS_TEMPLATE_ACCEPTED || '1777178447542965101',
     DISPATCH: process.env.SMS_TEMPLATE_DISPATCH || '1777178417937552272',
 };
 
@@ -168,9 +176,9 @@ async function sendPasswordResetOTPSMS(phone, otp) {
 }
 
 /**
- * Send Order Confirmation SMS — fires immediately when customer places an order.
+ * Send Order Confirmation SMS — fires immediately when customer places an order at checkout.
  *
- * Approved template (ID: 1777178411694628739):
+ * Approved template (ID: 1777178447542965101):
  *   "Dear {#var#}, your order {#var#} has been successfully placed. You can
  *    view your order details on our website. We will process your order for
  *    dispatch shortly. Thank you for shopping with us. Cursive Letters LY"
@@ -182,6 +190,23 @@ async function sendPasswordResetOTPSMS(phone, otp) {
 async function sendOrderConfirmationSMS(phone, customerName, orderID) {
     const text = `Dear ${customerName}, your order ${orderID} has been successfully placed. You can view your order details on our website. We will process your order for dispatch shortly. Thank you for shopping with us. Cursive Letters LY`;
     return sendSMS(phone, text, TEMPLATE_IDS.ORDER_CONFIRM);
+}
+
+/**
+ * Send Order Acceptance SMS — fires when admin sets orderStatus → 'accepted'.
+ *
+ * Approved template (ID: 1777178447542965101):
+ *   "Dear {#var#}, your order No.{#var#} has been successfully accepted. You can
+ *    view your order details on our website. We will process your order for
+ *    dispatch shortly. Thank you for shopping with us. Cursive Letters LY"
+ *
+ * @param {string} phone        Customer mobile number
+ * @param {string} customerName Customer's name
+ * @param {string} orderID      Order ID
+ */
+async function sendOrderAcceptedSMS(phone, customerName, orderID) {
+    const text = `Dear ${customerName}, your order No.${orderID} has been successfully accepted. You can view your order details on our website. We will process your order for dispatch shortly. Thank you for shopping with us. Cursive Letters LY`;
+    return sendSMS(phone, text, TEMPLATE_IDS.ORDER_ACCEPTED);
 }
 
 /**
@@ -239,17 +264,15 @@ async function getDeliveryStatus(jobId) {
 const sendOTPSMS = sendSignupOTPSMS;
 /** @deprecated Use sendOrderConfirmationSMS */
 const sendOrderConfirmedSMS = sendOrderConfirmationSMS;
-/** @deprecated Use sendOrderConfirmationSMS */
-const sendOrderAcceptedSMS = sendOrderConfirmationSMS;
 
 module.exports = {
     sendSignupOTPSMS,
     sendPasswordResetOTPSMS,
     sendOrderConfirmationSMS,
+    sendOrderAcceptedSMS,
     sendDispatchSMS,
     getDeliveryStatus,
     // legacy aliases
     sendOTPSMS,
     sendOrderConfirmedSMS,
-    sendOrderAcceptedSMS,
 };

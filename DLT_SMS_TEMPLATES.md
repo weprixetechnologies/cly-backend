@@ -25,13 +25,15 @@ Your OTP for Cursive Letters verification is {#var#}. Valid for 10 minutes. Do n
 
 ---
 
-## Template 2 — Order Accepted
+## Template 2 — Order Accepted (Admin Acceptance)
 
-**Use when:** Admin changes an order status to **accepted**.
+**Use when:** Admin sets order status to **accepted** from the admin panel.
+
+**DLT Template ID:** `1777178447542965101`
 
 **DLT Template Text (copy exactly):**
 ```
-Dear {#var#}, your order {#var#} has been accepted by Cursive Letters. Our team will process it shortly. Thank you for shopping with us! - Cursive Letters
+Dear {#var#}, your order No.{#var#} has been successfully accepted. You can view your order details on our website. We will process your order for dispatch shortly. Thank you for shopping with us. Cursive Letters LY
 ```
 
 **Variables:**
@@ -40,7 +42,7 @@ Dear {#var#}, your order {#var#} has been accepted by Cursive Letters. Our team 
 | 1 | `{#var#}` | `Rahul` (Customer name) |
 | 2 | `{#var#}` | `ORD_1720000000_ABC123` (Order ID) |
 
-**Character count:** ~155 chars (1 SMS credit)
+**Character count:** ~183 chars (1 SMS credit)
 
 **`.env` key:** `SMS_TEMPLATE_ACCEPTED`
 
@@ -97,14 +99,15 @@ After DLT approval, update `/backend/.env`:
 ```env
 # SMS GATEWAY (SMSGatewayHub)
 SMS_API_KEY=your_api_key_here
-SMS_SENDER_ID=CRSLTR          # Your 6-char approved sender ID
+SMS_SENDER_ID=CURSLY          # Your 6-char approved sender ID
 SMS_ENTITY_ID=your_entity_id  # Your DLT Entity ID
 
 # DLT Template IDs (fill after DLT registration)
-SMS_TEMPLATE_OTP=1234567890123
-SMS_TEMPLATE_ACCEPTED=1234567890124
-SMS_TEMPLATE_DISPATCH=1234567890125
-SMS_TEMPLATE_FORGOT=1234567890126
+SMS_TEMPLATE_OTP=1777178411219440996
+SMS_TEMPLATE_RESET_OTP=1777178411690264265
+SMS_TEMPLATE_CONFIRMED=1777178447542965101
+SMS_TEMPLATE_ACCEPTED=1777178447542965101
+SMS_TEMPLATE_DISPATCH=1777178417937552272
 ```
 
 ---
@@ -149,6 +152,7 @@ This endpoint will:
 | Event | Trigger Point | Phone Used |
 |-------|--------------|------------|
 | OTP | otpService.sendOTP(email, name, phone) | Phone passed from signup form |
+| Order Placed | POST /:uid/place-order (customer checkout) | addressPhone, fallback user.phoneNumber |
 | Order Accepted | PUT /api/order/admin/:orderID/status with "accepted" | addressPhone, fallback user.phoneNumber |
 | Dispatched | POST /api/order/admin/:orderID/dispatch | addressPhone, fallback user.phoneNumber |
 | Forgot Password | POST /api/auth/request-password-reset | user.phoneNumber from DB |

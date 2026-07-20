@@ -6,7 +6,7 @@ module.exports = {
 
     // Client URLs (for CORS)
     CLIENT_URL: process.env.CLIENT_URL || 'http://localhost:3000',
-    ADMIN_URL: process.env.ADMIN_URL || 'http://localhost:3001',
+    ADMIN_URL: process.env.ADMIN_URL || 'https://cursiveletters.in',
 
     // Database Configuration
     DATABASE: {
