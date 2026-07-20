@@ -28,6 +28,7 @@ const reviewRouter = require('./routers/reviewRouter.js');
 const siteReviewRouter = require('./routers/siteReviewRouter.js');
 const blogRouter = require('./routers/blogRouter.js');
 const settingsRouter = require('./routers/settingsRouter.js');
+const trustedLogoRouter = require('./routers/trustedLogoRouter.js');
 
 // Middleware
 app.use(cors());
@@ -74,6 +75,7 @@ app.use('/api', reviewRouter);
 app.use('/api', siteReviewRouter);
 app.use('/api', blogRouter);
 app.use('/api/settings', settingsRouter);
+app.use('/api/trusted-logos', trustedLogoRouter);
 
 // Setup routes (for creating tables)
 // Additional setup routes can be added here as needed
@@ -85,6 +87,9 @@ settingsModel.ensureTable().catch(err => console.error('❌ Failed to create sit
 
 const siteReviewModel = require('./models/siteReviewModel.js');
 siteReviewModel.ensureTable().catch(err => console.error('❌ Failed to create site_reviews table:', err));
+
+const trustedLogoModel = require('./models/trustedLogoModel.js');
+trustedLogoModel.ensureTable().catch(err => console.error('❌ Failed to create trusted_logos table:', err));
 
 const blogModel = require('./models/blogModel.js');
 setInterval(async () => {

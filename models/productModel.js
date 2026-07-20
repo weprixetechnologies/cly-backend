@@ -153,7 +153,7 @@ async function getAllProducts(page = 1, limit = 10, search = '', categoryID = ''
             params.push(isFeaturedValue);
         }
 
-        query += ` ORDER BY createdAt DESC LIMIT ? OFFSET ?`;
+        query += ` ORDER BY (CASE WHEN inventory > 0 THEN 0 ELSE 1 END) ASC, createdAt DESC LIMIT ? OFFSET ?`;
         params.push(limitNum, offset);
 
         const [rows] = await db.execute(query, params);
@@ -337,7 +337,7 @@ async function getProductsByCategory(categoryID, page = 1, limit = 24) {
         const limitNum = parseInt(limit) || 24;
         const offset = (pageNum - 1) * limitNum;
 
-        const query = `SELECT * FROM products WHERE categoryID = ? AND status = 'active' ORDER BY createdAt DESC LIMIT ? OFFSET ?`;
+        const query = `SELECT * FROM products WHERE categoryID = ? AND status = 'active' ORDER BY (CASE WHEN inventory > 0 THEN 0 ELSE 1 END) ASC, createdAt DESC LIMIT ? OFFSET ?`;
         const [rows] = await db.execute(query, [categoryID, limitNum, offset]);
 
         // Get total count for pagination
@@ -580,7 +580,7 @@ async function bulkCreateProducts(productsData) {
 async function getFeaturedProducts(limit = 20) {
     try {
         const limitNum = parseInt(limit) || 20;
-        const query = `SELECT * FROM products WHERE isFeatured = 1 AND status = 'active' ORDER BY createdAt DESC LIMIT ?`;
+        const query = `SELECT * FROM products WHERE isFeatured = 1 AND status = 'active' ORDER BY (CASE WHEN inventory > 0 THEN 0 ELSE 1 END) ASC, createdAt DESC LIMIT ?`;
         const [rows] = await db.execute(query, [limitNum]);
         return rows;
     } catch (error) {
