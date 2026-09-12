@@ -1,24 +1,25 @@
+require('dotenv').config();
 const nodemailer = require('nodemailer');
 
 class EmailService {
     constructor() {
         // Use environment variables with fallback to hardcoded values
         const smtpConfig = {
-            host: process.env.SMTP_HOST || 'smtp.gmail.com',
-            port: parseInt(process.env.SMTP_PORT) || 587,
-            secure: process.env.SMTP_SECURE === 'true', // true for 465, false for other ports
+            host: process.env.SMTP_HOST,
+            port: parseInt(process.env.SMTP_PORT),
+            secure: process.env.SMTP_SECURE , // true for 465, false for other ports
             auth: {
-                user: process.env.SMTP_USER || 'vishal0077@gmail.com',
-                pass: process.env.SMTP_PASS || 'guut cccy vsoz wtxr'
+                user: process.env.SMTP_USER ,
+                pass: process.env.SMTP_PASS ,
             }
         };
 
-        console.log('🔧 Email Service Configuration:', {
-            host: smtpConfig.host,
-            port: smtpConfig.port,
-            secure: smtpConfig.secure,
-            user: smtpConfig.auth.user
-        });
+        // console.log('🔧 Email Service Configuration:', {
+        //     host: smtpConfig.host,
+        //     port: smtpConfig.port,
+        //     secure: smtpConfig.secure,
+        //     user: smtpConfig.auth.user
+        // });
 
         this.transporter = nodemailer.createTransport(smtpConfig);
 
