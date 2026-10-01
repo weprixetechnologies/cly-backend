@@ -50,7 +50,7 @@ class EmailService {
         const htmlTemplate = this.generatePasswordResetTemplate(userName, resetUrl, email);
 
         const mailOptions = {
-            from: `"${process.env.COMPANY_NAME || 'Cly App'}" <${process.env.SMTP_USER || 'vishal0077@gmail.com'}>`,
+            from: `"${process.env.COMPANY_NAME || 'Cly App'}" <${process.env.SMTP_USER}>`,
             to: email,
             subject: 'Reset Your Password - Cly App',
             html: htmlTemplate
@@ -321,7 +321,7 @@ class EmailService {
         const htmlTemplate = this.generateOTPTemplate(userName, otp, email);
 
         const mailOptions = {
-            from: `"${process.env.COMPANY_NAME || 'Cly App'}" <${process.env.SMTP_USER || 'vishal0077@gmail.com'}>`,
+            from: `"${process.env.COMPANY_NAME || 'Cly App'}" <${process.env.SMTP_USER}>`,
             to: email,
             subject: 'Verify Your Email - Cly App',
             html: htmlTemplate

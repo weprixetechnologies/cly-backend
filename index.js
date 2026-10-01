@@ -31,10 +31,25 @@ const settingsRouter = require('./routers/settingsRouter.js');
 const trustedLogoRouter = require('./routers/trustedLogoRouter.js');
 
 // Middleware
-app.use(cors());
+const allowedOrigins = [
+    'https://cursiveletters.in',
+    'https://www.cursiveletters.in',
+    process.env.CLIENT_URL,
+    process.env.ADMIN_URL
+].filter(Boolean);
 
-// // Trust proxy for accurate IP detection
-app.set('trust proxy', true);
+app.use(cors({
+    origin: function (origin, callback) {
+        // allow requests with no origin (like mobile apps, curl, server-to-server)
+        if (!origin) return callback(null, true);
+        if (allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV === 'development') {
+            return callback(null, true);
+        } else {
+            return callback(new Error('CORS policy: Access denied for this origin.'));
+        }
+    },
+    credentials: true
+}));
 
 app.use(express.json({ limit: '1000mb' }));
 app.use(express.urlencoded({ limit: '1000mb', extended: true }));
