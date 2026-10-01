@@ -34,6 +34,7 @@ const trustedLogoRouter = require('./routers/trustedLogoRouter.js');
 const allowedOrigins = [
     'https://cursiveletters.in',
     'https://www.cursiveletters.in',
+    'https://superadmin.cursiveletters.in',
     process.env.CLIENT_URL,
     process.env.ADMIN_URL
 ].filter(Boolean);
