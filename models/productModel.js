@@ -1,4 +1,5 @@
 const db = require('../utils/dbconnect');
+const { generateUniqueSlug } = require('./productModel_slug_utils');
 
 // Generate unique product ID
 function generateProductID() {
@@ -59,11 +60,14 @@ async function createProduct(productData) {
             featuredImages,
             galleryImages,
             inventory,
-            isFeatured
+            isFeatured,
+            seoName
         } = productData;
 
+        const slug = await generateUniqueSlug(seoName, productName);
+
         const [result] = await db.execute(
-            'INSERT INTO products (\n                productID, productName, productPrice, sku, description, \n                boxQty, minQty, categoryID, categoryName, themeCategory, \n                featuredImages, galleryImages, inventory, isFeatured\n            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            'INSERT INTO products (\n                productID, productName, productPrice, sku, description, \n                boxQty, minQty, categoryID, categoryName, themeCategory, \n                featuredImages, galleryImages, inventory, isFeatured, seoName, slug\n            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
             [
                 productID,
                 productName,
@@ -78,7 +82,9 @@ async function createProduct(productData) {
                 featuredImages,
                 JSON.stringify(galleryImages),
                 inventory,
-                isFeatured ? 1 : 0
+                isFeatured ? 1 : 0,
+                seoName || null,
+                slug
             ]
         );
 
@@ -113,8 +119,8 @@ async function getAllProducts(page = 1, limit = 10, search = '', categoryID = ''
         // Validate and add search parameter
         if (search && typeof search === 'string' && search.trim() !== '') {
             const searchTerm = `%${search.trim()}%`;
-            query += ` AND (productName LIKE ? OR sku LIKE ? OR categoryName LIKE ?)`;
-            params.push(searchTerm, searchTerm, searchTerm);
+            query += ` AND (productName LIKE ? OR sku LIKE ? OR categoryName LIKE ? OR seoName LIKE ?)`;
+            params.push(searchTerm, searchTerm, searchTerm, searchTerm);
         }
 
         // Validate and add categoryID parameter
@@ -228,12 +234,12 @@ async function getAllProducts(page = 1, limit = 10, search = '', categoryID = ''
     }
 }
 
-// Get product by ID
-async function getProductById(productID) {
+// Get product by ID or slug
+async function getProductById(identifier) {
     try {
         const [rows] = await db.execute(
-            'SELECT * FROM products WHERE productID = ?',
-            [productID]
+            'SELECT * FROM products WHERE productID = ? OR slug = ?',
+            [identifier, identifier]
         );
         return rows[0] || null;
     } catch (error) {
@@ -269,29 +275,40 @@ async function updateProduct(productID, productData) {
             galleryImages,
             inventory,
             status,
-            isFeatured
+            isFeatured,
+            seoName,
+            slug
         } = productData;
 
-        const [result] = await db.execute(
-            'UPDATE products SET \n                productName = ?, productPrice = ?, sku = ?, description = ?,\n                boxQty = ?, minQty = ?, categoryID = ?, categoryName = ?, themeCategory = ?,\n                featuredImages = ?, galleryImages = ?, inventory = ?, status = ?, isFeatured = ?,\n                updatedAt = CURRENT_TIMESTAMP\n            WHERE productID = ?',
-            [
-                productName,
-                productPrice,
-                sku,
-                description,
-                boxQty,
-                minQty,
-                categoryID,
-                categoryName,
-                themeCategory || null,
-                featuredImages,
-                JSON.stringify(galleryImages),
-                inventory,
-                status,
-                isFeatured ? 1 : 0,
-                productID
-            ]
-        );
+        let queryStr = 'UPDATE products SET \n                productName = ?, productPrice = ?, sku = ?, description = ?,\n                boxQty = ?, minQty = ?, categoryID = ?, categoryName = ?, themeCategory = ?,\n                featuredImages = ?, galleryImages = ?, inventory = ?, status = ?, isFeatured = ?,\n                seoName = ?, updatedAt = CURRENT_TIMESTAMP';
+        
+        const queryParams = [
+            productName,
+            productPrice,
+            sku,
+            description,
+            boxQty,
+            minQty,
+            categoryID,
+            categoryName,
+            themeCategory || null,
+            featuredImages,
+            JSON.stringify(galleryImages),
+            inventory,
+            status,
+            isFeatured ? 1 : 0,
+            seoName || null
+        ];
+
+        if (slug) {
+            queryStr += ', slug = ?';
+            queryParams.push(slug);
+        }
+        
+        queryStr += ' WHERE productID = ?';
+        queryParams.push(productID);
+
+        const [result] = await db.execute(queryStr, queryParams);
 
         return {
             affectedRows: result.affectedRows,
@@ -487,7 +504,8 @@ async function bulkCreateProducts(productsData) {
                         productPrice,
                         inventory = 0,
                         boxQty = 1,
-                        minQty = 1
+                        minQty = 1,
+                        seoName
                     } = productData;
 
                     // Prepare update fields - only update specified fields
@@ -498,6 +516,10 @@ async function bulkCreateProducts(productsData) {
                         boxQty: (boxQty !== undefined && boxQty !== null && !isNaN(boxQty) && parseInt(boxQty) >= 1) ? parseInt(boxQty) : 1,
                         minQty: (minQty !== undefined && minQty !== null && !isNaN(minQty) && parseInt(minQty) >= 1) ? parseInt(minQty) : 1
                     };
+                    
+                    if (seoName !== undefined) {
+                        updateFields.seoName = seoName;
+                    }
 
                     // Update only specified fields (no category, description, themeCategory, images)
                     await updateProductBySku(productData.sku, updateFields);
@@ -525,16 +547,19 @@ async function bulkCreateProducts(productsData) {
                     productPrice,
                     inventory = 0,
                     boxQty = 1,
-                    minQty = 1
+                    minQty = 1,
+                    seoName
                 } = productData;
 
                 // Ensure boxQty and minQty are at least 1
                 const finalBoxQty = (boxQty !== null && boxQty !== undefined && !isNaN(boxQty) && parseInt(boxQty) >= 1) ? parseInt(boxQty) : 1;
                 const finalMinQty = (minQty !== null && minQty !== undefined && !isNaN(minQty) && parseInt(minQty) >= 1) ? parseInt(minQty) : 1;
 
+                const slug = await generateUniqueSlug(seoName, productName);
+
                 // Insert product - only insert specified fields
                 const [result] = await db.execute(
-                    'INSERT INTO products (productID, productName, productPrice, sku, inventory, boxQty, minQty) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                    'INSERT INTO products (productID, productName, productPrice, sku, inventory, boxQty, minQty, seoName, slug) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
                     [
                         productID,
                         productName,
@@ -542,7 +567,9 @@ async function bulkCreateProducts(productsData) {
                         sku,
                         inventory,
                         finalBoxQty,
-                        finalMinQty
+                        finalMinQty,
+                        seoName || null,
+                        slug
                     ]
                 );
 
@@ -602,8 +629,8 @@ async function getProductStats(search = '', categoryID = '', status = null, isFe
         }
 
         if (search) {
-            whereClause += ` AND (productName LIKE ? OR sku LIKE ? OR categoryName LIKE ?)`;
-            params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+            whereClause += ` AND (productName LIKE ? OR sku LIKE ? OR categoryName LIKE ? OR seoName LIKE ?)`;
+            params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
         }
 
         if (categoryID) {

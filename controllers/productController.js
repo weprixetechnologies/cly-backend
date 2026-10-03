@@ -18,7 +18,8 @@ const addProduct = async (req, res) => {
             featuredImages,
             galleryImages,
             inventory,
-            isFeatured
+            isFeatured,
+            seoName
         } = req.body;
 
         // Validate required fields
@@ -61,7 +62,8 @@ const addProduct = async (req, res) => {
             featuredImages: featuredImages || '',
             galleryImages: galleryImages || [],
             inventory: parseInt(inventory) || 0,
-            isFeatured: isFeatured === true || isFeatured === 'true' || isFeatured === 1 || isFeatured === '1'
+            isFeatured: isFeatured === true || isFeatured === 'true' || isFeatured === 1 || isFeatured === '1',
+            seoName: seoName || ''
         };
 
         const result = await productModel.createProduct(productData);
@@ -197,7 +199,9 @@ const updateProduct = async (req, res) => {
             galleryImages,
             inventory,
             status,
-            isFeatured
+            isFeatured,
+            seoName,
+            slug
         } = req.body;
 
         // Check if product exists
@@ -242,7 +246,9 @@ const updateProduct = async (req, res) => {
             galleryImages: galleryImages || [],
             inventory: parseInt(inventory) || 0,
             status: status || 'active',
-            isFeatured: isFeatured === true || isFeatured === 'true' || isFeatured === 1 || isFeatured === '1'
+            isFeatured: isFeatured === true || isFeatured === 'true' || isFeatured === 1 || isFeatured === '1',
+            seoName: seoName || null,
+            slug: slug || null
         };
 
         const oldCategoryID = existingProduct.categoryID || null;
@@ -766,6 +772,7 @@ const getProductStats = async (req, res) => {
     }
 };
 
+const regenerateSlug = async (req, res) => { try { const { productID } = req.params; const existingProduct = await productModel.getProductById(productID); if (!existingProduct) { return res.status(404).json({ success: false, message: "Product not found" }); } const { generateUniqueSlug } = require("../models/productModel_slug_utils"); const db = require("../utils/dbconnect"); const slug = await generateUniqueSlug(existingProduct.seoName, existingProduct.productName, productID); await db.execute("UPDATE products SET slug = ? WHERE productID = ?", [slug, existingProduct.productID]); res.status(200).json({ success: true, message: "Slug regenerated successfully", slug }); } catch (error) { console.error("Regenerate slug error:", error); res.status(500).json({ success: false, message: error.message }); } };
 module.exports = {
     addProduct,
     getAllProducts,
@@ -779,5 +786,7 @@ module.exports = {
     bulkAddProducts,
     deleteAllProducts,
     getProductStats,
-    getFeaturedProducts
+    getFeaturedProducts,
+    regenerateSlug
 };
+

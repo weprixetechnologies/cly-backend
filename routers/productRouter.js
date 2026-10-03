@@ -19,6 +19,7 @@ router.get('/stats', productController.getProductStats);
 router.get('/by-category/:categoryID', productController.getProductsByCategory);
 router.get('/:productID', productController.getProductById);
 router.put('/:productID', productController.updateProduct);
+router.put('/:productID/regenerate-slug', productController.regenerateSlug);
 router.delete('/:productID', productController.deleteProduct);
 
 // Category routes
