@@ -516,10 +516,6 @@ async function bulkCreateProducts(productsData) {
                         boxQty: (boxQty !== undefined && boxQty !== null && !isNaN(boxQty) && parseInt(boxQty) >= 1) ? parseInt(boxQty) : 1,
                         minQty: (minQty !== undefined && minQty !== null && !isNaN(minQty) && parseInt(minQty) >= 1) ? parseInt(minQty) : 1
                     };
-                    
-                    if (seoName !== undefined) {
-                        updateFields.seoName = seoName;
-                    }
 
                     // Update only specified fields (no category, description, themeCategory, images)
                     await updateProductBySku(productData.sku, updateFields);
@@ -547,15 +543,14 @@ async function bulkCreateProducts(productsData) {
                     productPrice,
                     inventory = 0,
                     boxQty = 1,
-                    minQty = 1,
-                    seoName
+                    minQty = 1
                 } = productData;
 
                 // Ensure boxQty and minQty are at least 1
                 const finalBoxQty = (boxQty !== null && boxQty !== undefined && !isNaN(boxQty) && parseInt(boxQty) >= 1) ? parseInt(boxQty) : 1;
                 const finalMinQty = (minQty !== null && minQty !== undefined && !isNaN(minQty) && parseInt(minQty) >= 1) ? parseInt(minQty) : 1;
 
-                const slug = await generateUniqueSlug(seoName, productName);
+                const slug = await generateUniqueSlug(null, productName);
 
                 // Insert product - only insert specified fields
                 const [result] = await db.execute(
@@ -568,7 +563,7 @@ async function bulkCreateProducts(productsData) {
                         inventory,
                         finalBoxQty,
                         finalMinQty,
-                        seoName || null,
+                        null,
                         slug
                     ]
                 );
