@@ -18,6 +18,8 @@ async function migrate() {
         console.log('Populating slugs for existing products...');
         const [products] = await db.execute('SELECT productID, productName, seoName FROM products');
         
+        let updatedCount = 0;
+
         for (const p of products) {
             const baseName = p.seoName || p.productName || 'product';
             let slug = baseName.toString().toLowerCase()
@@ -38,8 +40,11 @@ async function migrate() {
             }
             
             await db.execute('UPDATE products SET slug = ? WHERE productID = ?', [uniqueSlug, p.productID]);
+            updatedCount++;
         }
         
+        console.log(`Successfully populated slugs for ${updatedCount} products.`);
+
         try {
             await db.execute('ALTER TABLE products ADD UNIQUE INDEX idx_slug (slug)');
         } catch (e) {
