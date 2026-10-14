@@ -555,6 +555,19 @@ async function getUserStats(search = '', approvalStatus = null) {
     }
 }
 
+// Ensure users.role ENUM includes 'editor'
+async function ensureEditorRole() {
+    try {
+        await db.execute(`
+            ALTER TABLE users 
+            MODIFY COLUMN role ENUM('user', 'admin', 'manager', 'editor') DEFAULT 'user'
+        `);
+        console.log('✅ Ensured users.role includes editor');
+    } catch (err) {
+        console.log('Note on users.role check:', err.message);
+    }
+}
+
 module.exports = {
     checkUsernameExists,
     checkEmailExists,
@@ -580,5 +593,6 @@ module.exports = {
     getUserByUid,
     updateUser,
     updateUserPassword,
-    getUserStats
+    getUserStats,
+    ensureEditorRole
 };

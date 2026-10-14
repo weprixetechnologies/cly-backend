@@ -3,6 +3,7 @@ const settingsModel = require('../models/settingsModel');
 // Default fallback values for known settings
 const DEFAULTS = {
     global_discount: '12',
+    editor_products_access: 'closed',
 };
 
 /**

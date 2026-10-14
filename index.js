@@ -101,6 +101,9 @@ app.use('/api/trusted-logos', trustedLogoRouter);
 const settingsModel = require('./models/settingsModel.js');
 settingsModel.ensureTable().catch(err => console.error('❌ Failed to create site_settings table:', err));
 
+const authModel = require('./models/authModel.js');
+authModel.ensureEditorRole().catch(err => console.error('❌ Failed to ensure editor role in users table:', err));
+
 const siteReviewModel = require('./models/siteReviewModel.js');
 siteReviewModel.ensureTable().catch(err => console.error('❌ Failed to create site_reviews table:', err));
 

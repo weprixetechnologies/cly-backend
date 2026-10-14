@@ -5,10 +5,10 @@ const { verifyAdminAccessToken } = require('../middleware/adminAuthMiddleware');
 const { verifyUserAccessToken } = require('../middleware/userAuthMiddleware');
 const { uploadSingleImage } = require('../utils/multerConfig');
 
-// Role checking middleware
-const verifyAdminRole = (req, res, next) => {
-    console.log('[verifyAdminRole] req.user:', req.user);
-    if (!req.user || (req.user.role !== 'admin' && req.user.role !== 'manager')) {
+// Role checking middleware (admin, manager, editor have full access to blog actions)
+const verifyBlogRole = (req, res, next) => {
+    console.log('[verifyBlogRole] req.user:', req.user);
+    if (!req.user || (req.user.role !== 'admin' && req.user.role !== 'manager' && req.user.role !== 'editor')) {
         return res.status(403).json({
             success: false,
             message: 'Forbidden. You do not have permissions to perform this action.'
@@ -29,7 +29,7 @@ router.get('/blog/rss', blogController.getRSSFeed);
 // --- ADMIN BLOG ENDPOINTS ---
 
 // Apply authentication and role check to all admin routes
-router.use('/admin/blog', verifyAdminAccessToken, verifyAdminRole);
+router.use('/admin/blog', verifyAdminAccessToken, verifyBlogRole);
 
 // Categories
 router.post('/admin/blog/categories', blogController.createCategory);

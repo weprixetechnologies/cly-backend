@@ -3,8 +3,19 @@ const router = express.Router();
 const userManagementController = require('../controllers/userManagementController');
 const { verifyAdminAccessToken } = require('../middleware/adminAuthMiddleware');
 
-// Apply admin authentication to all routes
-router.use(verifyAdminAccessToken);
+// Role check: Only superadmin / manager can manage users
+const verifySuperAdminRole = (req, res, next) => {
+    if (!req.user || (req.user.role !== 'admin' && req.user.role !== 'manager')) {
+        return res.status(403).json({
+            success: false,
+            message: 'Forbidden. Only administrators can access user management.'
+        });
+    }
+    next();
+};
+
+// Apply admin authentication and superadmin check to all routes
+router.use(verifyAdminAccessToken, verifySuperAdminRole);
 
 // Create user (bypasses OTP)
 router.post('/', userManagementController.createUser);

@@ -5,9 +5,17 @@ const { verifyUserAccessToken } = require('../middleware/userAuthMiddleware');
 const { verifyAdminAccessToken } = require('../middleware/adminAuthMiddleware');
 const smsService = require('../services/smsService');
 
+// Role check for admin order access
+const verifyAdminOrManager = (req, res, next) => {
+    if (!req.user || (req.user.role !== 'admin' && req.user.role !== 'manager')) {
+        return res.status(403).json({ success: false, message: 'Forbidden. Admin access required.' });
+    }
+    next();
+};
+
 // Apply authentication middleware to all routes
 router.use('/user', verifyUserAccessToken);
-router.use('/admin', verifyAdminAccessToken);
+router.use('/admin', verifyAdminAccessToken, verifyAdminOrManager);
 
 // User order routes
 router.post('/user/:uid/place-order', orderController.placeOrder);

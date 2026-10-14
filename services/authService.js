@@ -124,7 +124,7 @@ async function registerUser(userData, role) {
             password,
             role,
             approval_status: 'approved', // Admin approval no longer required
-            approved_by: role === 'admin' ? 'system' : 'self',
+            approved_by: (role === 'admin' || role === 'editor' || role === 'manager') ? 'system' : 'self',
             approved_at: new Date()
         };
 
@@ -344,11 +344,15 @@ async function loginUser(loginData, role) {
         }
 
         // Check if user has the correct role
-        if (user.role !== role) {
+        if (role === 'admin') {
+            if (!['admin', 'manager', 'editor'].includes(user.role)) {
+                throw new Error(`Access denied. This account is not authorized for admin panel login`);
+            }
+        } else if (user.role !== role) {
             throw new Error(`Access denied. This account is not authorized for ${role} login`);
         }
 
-        // Check if user is approved (only for regular users, admins are auto-approved)
+        // Check if user is approved (only for regular users, staff/admin/editor are auto-approved)
         if (user.role === 'user' && user.approval_status !== 'approved') {
             if (user.approval_status === 'pending') {
                 throw new Error('Your account is pending approval. Please wait for admin approval.');

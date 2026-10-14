@@ -130,7 +130,7 @@ async function registerUser(req, res) {
                 const jwt = require('jsonwebtoken');
                 const jwtSecret = process.env.JWT_ACCESS_SECRET || 'cly2025a';
                 const decoded = jwt.verify(token, jwtSecret);
-                if (decoded.role === 'admin' || decoded.role === 'manager') {
+                if (decoded.role === 'admin' || decoded.role === 'manager' || decoded.role === 'editor') {
                     isAdmin = true;
                 }
             } catch (err) {
