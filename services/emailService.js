@@ -3,43 +3,58 @@ const nodemailer = require('nodemailer');
 
 class EmailService {
     constructor() {
-        // Use environment variables with fallback to hardcoded values
-        const smtpConfig = {
-            host: process.env.SMTP_HOST,
-            port: parseInt(process.env.SMTP_PORT),
-            secure: process.env.SMTP_SECURE , // true for 465, false for other ports
-            auth: {
-                user: process.env.SMTP_USER ,
-                pass: process.env.SMTP_PASS ,
-            }
-        };
+        this.transporter = null;
+        this.isReady = false;
 
-        // console.log('🔧 Email Service Configuration:', {
-        //     host: smtpConfig.host,
-        //     port: smtpConfig.port,
-        //     secure: smtpConfig.secure,
-        //     user: smtpConfig.auth.user
-        // });
+        const host = process.env.SMTP_HOST;
+        const port = parseInt(process.env.SMTP_PORT, 10) || 587;
+        // String 'false' in process.env is truthy in JS, so explicitly check 'true' or port 465
+        const isSecure = process.env.SMTP_SECURE === 'true' || process.env.SMTP_SECURE === true || port === 465;
+        const user = process.env.SMTP_USER;
+        const pass = process.env.SMTP_PASS;
 
-        this.transporter = nodemailer.createTransport(smtpConfig);
+        if (!host || !user || !pass) {
+            console.log('ℹ️ Email service: SMTP credentials not fully configured. Email fallback will remain idle.');
+            return;
+        }
 
-        // Verify connection on initialization (non-blocking)
-        this.initializeEmail().catch(err => {
-            console.error('⚠️ Email service initialization warning:', err.message);
-            console.log('📧 Emails may not work until SMTP is properly configured');
-        });
+        try {
+            const smtpConfig = {
+                host,
+                port,
+                secure: isSecure, // false for 587 (STARTTLS), true for 465 (SSL)
+                auth: {
+                    user,
+                    pass,
+                },
+                connectionTimeout: 5000,
+                greetingTimeout: 5000,
+                socketTimeout: 5000,
+                tls: {
+                    rejectUnauthorized: false
+                }
+            };
+
+            this.transporter = nodemailer.createTransport(smtpConfig);
+
+            // Verify in background without blocking server startup
+            setImmediate(() => {
+                this.testConnection().catch(() => {});
+            });
+        } catch (err) {
+            console.warn('⚠️ Email service setup skipped:', err.message);
+        }
     }
 
     async initializeEmail() {
-        console.log('📧 Initializing email service...');
-        const result = await this.testConnection();
-        if (result) {
-            console.log('✅ Email service ready!');
-        }
-        return result;
+        return this.testConnection();
     }
 
     async sendPasswordResetEmail(email, resetToken, userName) {
+        if (!this.transporter) {
+            console.warn('⚠️ Email service transporter not available. Skipping reset email.');
+            return { success: false, error: 'Email service transporter not available' };
+        }
         console.log('📧 ========================================');
         console.log('📧 CALLING sendPasswordResetEmail');
         console.log('📧 Email:', email);
@@ -312,6 +327,10 @@ class EmailService {
     }
 
     async sendOTPEmail(email, otp, userName) {
+        if (!this.transporter) {
+            console.warn('⚠️ Email service transporter not available. Skipping OTP email.');
+            return { success: false, error: 'Email service transporter not available' };
+        }
         console.log('📧 ========================================');
         console.log('📧 CALLING sendOTPEmail');
         console.log('📧 Email:', email);
@@ -554,21 +573,15 @@ class EmailService {
     }
 
     async testConnection() {
+        if (!this.transporter) return false;
         try {
-            console.log('🔍 Testing email service connection...');
-            const result = await this.transporter.verify();
-            console.log('✅ Email service connection verified successfully!');
+            await this.transporter.verify();
+            this.isReady = true;
+            console.log('✅ Email service verified and ready.');
             return true;
         } catch (error) {
-            console.error('❌ Email service connection failed!');
-            console.error('Error message:', error.message);
-            console.error('Error code:', error.code);
-            console.error('Full error:', error);
-            console.log('💡 Troubleshooting tips:');
-            console.log('   1. Check if Gmail app password is correct');
-            console.log('   2. Enable "Less secure app access" or use app password');
-            console.log('   3. Check firewall/network restrictions on port 587');
-            console.log('   4. Verify SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS env variables');
+            this.isReady = false;
+            console.warn(`⚠️ Email service notice: SMTP connection not ready (${error.code || error.message}). Backend will continue running normally.`);
             return false;
         }
     }
