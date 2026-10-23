@@ -29,6 +29,8 @@ const siteReviewRouter = require('./routers/siteReviewRouter.js');
 const blogRouter = require('./routers/blogRouter.js');
 const settingsRouter = require('./routers/settingsRouter.js');
 const trustedLogoRouter = require('./routers/trustedLogoRouter.js');
+const leadRouter = require('./routers/leadRouter.js');
+const widgetRouter = require('./routers/widgetRouter.js');
 
 // Middleware
 const allowedOrigins = [
@@ -92,6 +94,8 @@ app.use('/api', siteReviewRouter);
 app.use('/api', blogRouter);
 app.use('/api/settings', settingsRouter);
 app.use('/api/trusted-logos', trustedLogoRouter);
+app.use('/api', leadRouter);
+app.use('/api', widgetRouter);
 
 // Setup routes (for creating tables)
 // Additional setup routes can be added here as needed
@@ -109,6 +113,9 @@ siteReviewModel.ensureTable().catch(err => console.error('❌ Failed to create s
 
 const trustedLogoModel = require('./models/trustedLogoModel.js');
 trustedLogoModel.ensureTable().catch(err => console.error('❌ Failed to create trusted_logos table:', err));
+
+const leadModel = require('./models/leadModel.js');
+leadModel.ensureTable().catch(err => console.error('❌ Failed to create leads table:', err));
 
 const blogModel = require('./models/blogModel.js');
 setInterval(async () => {
