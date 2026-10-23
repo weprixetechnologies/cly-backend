@@ -12,7 +12,8 @@
     "migrate:payment-status": "node migrations/add_payment_status_to_orders.js",
     "migrate:paid-amount": "node migrations/add_paid_amount_to_orders.js",
     "migrate:order-payment": "node migrations/update_payment_tracking_to_order_level.js",
-    "migrate:partially-paid": "node migrations/add_partially_paid_to_payment_status.js"
+    "migrate:partially-paid": "node migrations/add_partially_paid_to_payment_status.js",
+    "migrate:leads-widget": "node run_leads_and_widget_migration.js"
   },
   "author": "",
   "license": "ISC",
