@@ -49,7 +49,7 @@ const getCategoryById = async (req, res) => {
 // Create new category
 const createCategory = async (req, res) => {
     try {
-        const { categoryName, image } = req.body;
+        const { categoryName, slug, image } = req.body;
 
         // Validate required fields
         if (!categoryName || categoryName.trim() === '') {
@@ -61,6 +61,7 @@ const createCategory = async (req, res) => {
 
         const categoryData = {
             categoryName: categoryName.trim(),
+            slug: slug ? slug.trim() : null,
             image: image || null
         };
 
@@ -74,7 +75,7 @@ const createCategory = async (req, res) => {
     } catch (error) {
         console.error('Error creating category:', error);
 
-        if (error.message === 'Category name already exists') {
+        if (error.message === 'Category name already exists' || error.message === 'Category slug already exists') {
             return res.status(409).json({
                 success: false,
                 message: error.message
@@ -124,7 +125,7 @@ const updateCategory = async (req, res) => {
             });
         }
 
-        if (error.message === 'Category name already exists') {
+        if (error.message === 'Category name already exists' || error.message === 'Category slug already exists') {
             return res.status(409).json({
                 success: false,
                 message: error.message

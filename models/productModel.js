@@ -238,7 +238,10 @@ async function getAllProducts(page = 1, limit = 10, search = '', categoryID = ''
 async function getProductById(identifier) {
     try {
         const [rows] = await db.execute(
-            'SELECT * FROM products WHERE productID = ? OR slug = ?',
+            `SELECT p.*, c.slug as categorySlug 
+             FROM products p 
+             LEFT JOIN categories c ON p.categoryID = c.categoryID 
+             WHERE p.productID = ? OR p.slug = ?`,
             [identifier, identifier]
         );
         return rows[0] || null;
@@ -354,12 +357,19 @@ async function getProductsByCategory(categoryID, page = 1, limit = 24) {
         const limitNum = parseInt(limit) || 24;
         const offset = (pageNum - 1) * limitNum;
 
+        // Resolve category if identifier is a slug or ID
+        const [cats] = await db.execute(
+            'SELECT categoryID FROM categories WHERE categoryID = ? OR slug = ? LIMIT 1',
+            [categoryID, categoryID]
+        );
+        const resolvedCategoryID = cats.length > 0 ? cats[0].categoryID : categoryID;
+
         const query = `SELECT * FROM products WHERE categoryID = ? AND status = 'active' ORDER BY (CASE WHEN inventory > 0 THEN 0 ELSE 1 END) ASC, createdAt DESC LIMIT ? OFFSET ?`;
-        const [rows] = await db.execute(query, [categoryID, limitNum, offset]);
+        const [rows] = await db.execute(query, [resolvedCategoryID, limitNum, offset]);
 
         // Get total count for pagination
         const countQuery = `SELECT COUNT(*) as total FROM products WHERE categoryID = ? AND status = 'active'`;
-        const [countResult] = await db.execute(countQuery, [categoryID]);
+        const [countResult] = await db.execute(countQuery, [resolvedCategoryID]);
         const total = countResult[0].total;
 
         return {
