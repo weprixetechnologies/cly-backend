@@ -5,8 +5,8 @@ module.exports = {
     NODE_ENV: process.env.NODE_ENV || 'development',
 
     // Client URLs (for CORS)
-    CLIENT_URL: process.env.CLIENT_URL || 'http://localhost:3000',
-    ADMIN_URL: process.env.ADMIN_URL || 'https://cursiveletters.in',
+    CLIENT_URL: process.env.CLIENT_URL || 'https://cursiveletters.in',
+    ADMIN_URL: process.env.ADMIN_URL || 'https://superadmin.cursiveletters.in',
 
     // Database Configuration
     DATABASE: {
